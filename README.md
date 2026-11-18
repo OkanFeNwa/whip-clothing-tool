@@ -67,10 +67,18 @@ Freemode props are resolved from the **base** file the ped actually wears, not f
 - glasses use `p_eyes_NNN.ydd` in the same folder
 - the three-digit number is the drawable index; each prop `.ydd` has a single entry (index 0)
 - textures `a`–`h` map to indices 0–7 and come from `p_head_diff_NNN_<letter>.ytd` in the same base folder (`p_eyes_diff_...` for glasses)
-- texture indices above 7 are **not** exported for base drawables: those variants do not exist in the base folder, and the wheel registry falls back to texture 0 for them
+- texture indices **8–25** (`i`–`z`) are added by DLC packs as extra `.ytd` variants for the *same* base drawable. They are exported too, using the base geometry and one DLC `.ytd` per index. Skipping them makes the wheel fall back to the generic `prop_cap_01` whenever the player wears a high texture number.
 - the real texture name from the selected `.ytd` is baked into the spawned prop's `diffusesampler`, so a dropped prop shows the same colours as the worn item
 
-DLC variants with the same filename are only used for drawable indices that do not exist in the base set. This prevents exporting a themed helmet in place of the base hat.
+DLC **`.ydd`** files with the same filename are only used for drawable indices that do not exist in the base set. This prevents exporting a themed helmet in place of the base hat, while still allowing every texture variant the ped can wear.
+
+Some base prop files are **4-vertex placeholders** rather than real models (for example `p_eyes_000.ydd` in the base RPF, while DLC packs carry the actual glasses). During export the worker detects such placeholders and automatically falls back to the next-ranked DLC source with real geometry. If every candidate is a stub, the best one is exported instead of failing. The manifest's `source` field records the file actually used.
+
+You can verify both rules against your RPF cache after any tool update:
+
+```powershell
+python scripts/verify_prop_export_rules.py E:/whip/output/.wct_cache/rpf_index.json
+```
 
 ## Spawning the exported models
 

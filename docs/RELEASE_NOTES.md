@@ -67,7 +67,7 @@ Each model in `stream/` is a normalised static prop (`normal_spec.sps`, `Color 1
 - The first vanilla run builds an RPF index inside `<output root>/.wct_cache/`; it can take a few minutes, later runs reuse the cache.
 - Collisions are only written when the source contains real bounds; no placeholder collision is invented.
 - JPEG does not support transparency. Use PNG or WebP for transparent previews.
-- Props are taken from the base `streamedpedprops.rpf/mp_[mf]_freemode_01_p/` files the ped actually wears. DLC packs with the same filename are ignored unless the drawable does not exist in the base set — this fixes exporting a themed helmet instead of the base hat. Only base texture variants `a`–`h` (indices 0–7) are exported; higher indices are left to the registry's texture-0 fallback. The real `.ytd` texture name is baked into the spawned prop's `diffusesampler`.
+- Props are taken from the base `streamedpedprops.rpf/mp_[mf]_freemode_01_p/` files the ped actually wears. DLC packs with the same filename are ignored unless the drawable does not exist in the base set — this fixes exporting a themed helmet instead of the base hat. All texture variants the ped can wear are exported: base `a`–`h` (0–7) plus DLC-added `i`–`z` (8–25) variants for the same drawable, so high texture numbers no longer fall back to `prop_cap_01`. The real `.ytd` texture name is baked into the spawned prop's `diffusesampler`.
 - The full export log is appended to `<output root>/wct_export.log`. Harmless Blender DDS cache warnings are recorded there but hidden in the app.
 - All input/output paths are selected in the app. The build contains no game, server or user paths.
 
@@ -123,7 +123,7 @@ Ogni modello in `stream/` è un prop statico normalizzato (`normal_spec.sps`, Co
 - La prima esecuzione vanilla crea l’indice RPF in `<output root>/.wct_cache/`; può volerci qualche minuto, poi viene riutilizzato.
 - Le collisioni vengono scritte solo se la sorgente contiene bounds reali.
 - JPEG non supporta la trasparenza: usa PNG o WebP.
-- I prop vengono presi dai file base `streamedpedprops.rpf/mp_[mf]_freemode_01_p/` che il ped indossa davvero. Le DLC con lo stesso nome vengono ignorate salvo quando il drawable non esiste nel set base: così non esce più un casco tematico al posto del cappello base. Vengono esportate solo le varianti texture base `a`–`h` (indici 0–7); gli indici superiori usano il fallback texture 0 del registry. Il nome reale della texture nel `.ytd` viene scritto nel `diffusesampler` del prop spawnato.
+- I prop vengono presi dai file base `streamedpedprops.rpf/mp_[mf]_freemode_01_p/` che il ped indossa davvero. Le DLC con lo stesso nome vengono ignorate salvo quando il drawable non esiste nel set base: così non esce più un casco tematico al posto del cappello base. Vengono esportate tutte le varianti texture che il ped può indossare: base `a`–`h` (0–7) più le varianti DLC `i`–`z` (8–25) per lo stesso drawable, così i texture alti non cadono più nel fallback `prop_cap_01`. Il nome reale della texture nel `.ytd` viene scritto nel `diffusesampler` del prop spawnato.
 - Il log completo viene scritto in `<output root>/wct_export.log`; i warning DDS non fatali di Blender sono nel file ma nascosti nell’app.
 - Tutti i percorsi si scelgono nell’app: la build non contiene percorsi di gioco, server o utente.
 

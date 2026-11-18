@@ -1066,6 +1066,26 @@ def is_base_prop_source(src) -> bool:
     )
 
 
+def drawable_vertex_count(asset) -> int:
+    """Total vertices across every drawable/model/geometry of a loaded asset.
+
+    Several GTA prop files are placeholders: a single 4-vertex quad far from
+    the ped (or at a junk position). They load fine but produce an invisible
+    or nonsensical prop. The export worker uses this to fall back to a DLC
+    source with real geometry when the preferred base file is a placeholder.
+    """
+    total = 0
+    for d in (getattr(asset, "drawables", None) or {}).values():
+        d = d[0] if isinstance(d, (list, tuple)) else d
+        for models in (getattr(d, "models", None) or {}).values():
+            for m in (models if isinstance(models, (list, tuple)) else [models]):
+                for g in (getattr(m, "geometries", []) or []):
+                    vb = getattr(g, "vertex_buffer", None)
+                    if vb is not None and "Position" in (getattr(vb.dtype, "names", None) or ()):
+                        total += len(vb["Position"])
+    return total
+
+
 def dedupe_sources(items: list[dict], key_fn, label: str) -> list[dict]:
     best: dict[tuple, tuple[tuple, dict]] = {}
     for item in items:
@@ -1082,9 +1102,24 @@ def build_tasks(job: dict, ydds: list, ytds: list, out_root: Path) -> list[dict]
     parsed_ydd = [p for src in ydds if (p := parse_source(src, Path(str(src)).name))]
     parsed_ytd = [p for src in ytds if (p := parse_source(src, Path(str(src)).name, True))]
 
+    # Keep every candidate .ydd per drawable, ranked, BEFORE deduplication.
+    # The preferred source can turn out to be a 4-vertex placeholder (common
+    # for p_eyes_000.ydd in the base RPF), in which case the export worker
+    # swaps in the next candidate with real geometry. Building this after
+    # dedupe_sources() would leave only the placeholder itself.
+    ydd_alternatives: dict[tuple, list[dict]] = {}
+    for item in parsed_ydd:
+        key = (item["gender"], item["part"], item["draw"])
+        ydd_alternatives.setdefault(key, []).append(item)
+    for key in ydd_alternatives:
+        ydd_alternatives[key].sort(
+            key=lambda p: (source_preference(p["source"], p), source_string(p["source"]))
+        )
+
     parsed_ydd = dedupe_sources(
         parsed_ydd, lambda p: (p["gender"], p["part"], p["draw"]), "drawable files"
     )
+
     parsed_ytd = dedupe_sources(
         parsed_ytd,
         lambda p: (p["gender"], p["part"], p["draw"], p["texIndex"]),
@@ -1106,24 +1141,29 @@ def build_tasks(job: dict, ydds: list, ytds: list, out_root: Path) -> list[dict]
         pairs = categories_for_part(item["part"], model_cats, preview_cats, mode)
         if not pairs:
             continue
-        textures = ytd_by_key.get(
-            (item["gender"], item["part"], item["draw"], item["collection"]), []
-        ) or ytd_by_key.get((item["gender"], item["part"], item["draw"], "*"), [])
-
-        # For drawables that come from the canonical base prop file, the ped
-        # only uses texture variants a-h (indices 0-7) from that same folder.
-        # Higher indices exist only in unrelated DLC packs and used to put
-        # Christmas colours on the base hat. The wheel registry falls back to
-        # texture 0, so those variants are deliberately not exported.
+        # Freemode props (hats/glasses) use the BASE geometry from
+        # streamedpedprops.rpf for every texture variant. The ped can wear
+        # texture indices 0-25: indices 0-7 ship in the base RPF (a-h), while
+        # indices 8-25 are added by DLC packs as extra .ytd variants for the
+        # SAME drawable. Both must be exported or the wheel falls back to the
+        # generic prop_cap_01 whenever the player picks a high texture.
+        #
+        # dedupe_sources() already chose the base .ytd for indices 0-7 (rank 0)
+        # and one DLC .ytd for 8-25. Use the "*" wildcard here so DLC textures
+        # are not discarded by the exact-collection lookup (base collection
+        # "np" has no entry for indices > 7).
         if (
             item["part"] in ("p_head", "p_eyes")
             and item["collection"] == "np"
             and is_base_prop_source(item["source"])
         ):
-            textures = [
-                t for t in textures
-                if t["texIndex"] <= 7 and is_base_prop_source(t["source"])
-            ]
+            textures = list(
+                ytd_by_key.get((item["gender"], item["part"], item["draw"], "*"), [])
+            )
+        else:
+            textures = ytd_by_key.get(
+                (item["gender"], item["part"], item["draw"], item["collection"]), []
+            ) or ytd_by_key.get((item["gender"], item["part"], item["draw"], "*"), [])
 
         textures = sorted(textures, key=lambda t: (t["texIndex"], t["name"])) or [None]
         for cat, kind in pairs:
@@ -1140,6 +1180,9 @@ def build_tasks(job: dict, ydds: list, ytds: list, out_root: Path) -> list[dict]
                     "slot": slot,
                     "ydd": item["source"],
                     "yddName": item["name"],
+                    "yddAlternatives": ydd_alternatives.get(
+                        (item["gender"], item["part"], item["draw"]), []
+                    ),
                     "textures": [tex] if tex else [],
                     "modelDir": out_root / "models" / f"whip_media_clothing_{item['gender']}" / "img" / "clothing" / item["gender"] / folder,
                     "previewDir": out_root / "previews" / f"whip_media_clothing_{item['gender']}" / "img" / "clothing" / item["gender"] / folder,
@@ -1297,17 +1340,49 @@ def export(job: dict) -> None:
         for index, task in enumerate(tasks, 1):
             label = f"{task['gender']} {task['part']} #{task['draw']:03d} / {task['slot']}"
             try:
-                cache_key = source_string(task["ydd"])
-                asset = asset_cache.get(cache_key)
+                # The preferred source can be a 4-vertex placeholder (notably
+                # p_eyes_000.ydd in the base RPF, while DLC packs carry the real
+                # glasses). For props, try ranked candidates until one has real
+                # geometry; the base file still wins whenever it is valid.
+                candidates = [task["ydd"]] + [
+                    a["source"] for a in task.get("yddAlternatives", [])
+                    if source_string(a["source"]) != source_string(task["ydd"])
+                ]
+                asset = None
+                chosen_source = task["ydd"]
+                best_asset = None
+                best_source = None
+                best_verts = -1
+                is_prop = task["part"].startswith("p_")
+                for cand in candidates:
+                    key = source_string(cand)
+                    cached = asset_cache.get(key)
+                    if cached is not None:
+                        cand_asset = cached
+                    else:
+                        loaded = try_load_asset(cand, return_target=True)
+                        if not loaded:
+                            continue
+                        cand_asset, _ = loaded
+                        if polygon_ratio < 1.0:
+                            for _, source_drawable in (cand_asset.drawables or {}).items():
+                                optimize_polygons(source_drawable, polygon_ratio)
+                        asset_cache[key] = cand_asset
+                    verts = drawable_vertex_count(cand_asset) if is_prop else 10**6
+                    if verts > best_verts:
+                        best_asset, best_source, best_verts = cand_asset, cand, verts
+                    if verts > 4:
+                        asset = cand_asset
+                        chosen_source = cand
+                        break
+                if asset is None and best_asset is not None:
+                    # No candidate has real geometry (e.g. female p_eyes_012 /
+                    # 015 are 4-vertex stubs everywhere). Export the best stub
+                    # instead of failing the whole drawable/texture pair.
+                    asset = best_asset
+                    chosen_source = best_source
                 if asset is None:
-                    loaded = try_load_asset(task["ydd"], return_target=True)
-                    if not loaded:
-                        raise RuntimeError(f"Cannot load {task['yddName']}")
-                    asset, _ = loaded
-                    if polygon_ratio < 1.0:
-                        for _, source_drawable in (asset.drawables or {}).items():
-                            optimize_polygons(source_drawable, polygon_ratio)
-                    asset_cache[cache_key] = asset
+                    raise RuntimeError(f"Cannot load {task['yddName']}")
                 drawables = list((asset.drawables or {}).items())
                 if not drawables:
                     raise RuntimeError(f"No drawables in {task['yddName']}")
@@ -1355,7 +1430,7 @@ def export(job: dict) -> None:
                             row = {
                                 "category": task["category"],
                                 "kind": task["kind"],
-                                "source": source_string(task["ydd"]),
+                                "source": source_string(chosen_source),
                                 "texture": tex["name"] if tex else None,
                                 "name": base_name,
                             }
