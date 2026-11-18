@@ -4,6 +4,7 @@ Whip Clothing Tool ist eine Windows-Desktop-App zum Exportieren von **GTA-V-Klei
 
 - Erzeugt **Vorschau-Bilder** (gleicher Blickwinkel und gleiche Beleuchtung für Konsistenz) mit **transparentem Hintergrund**, in wählbarem **Format** und **Größe**.
 - Exportiert **Prop-Modelle** für fallende/geworfene Kleidung: erzeugt **`.ydr` + `.ytd`** (und optional Kollisionsdateien, falls unterstützt) in einem von Ihnen gewählten **Ausgabeordner**.
+- **Optimiert Polygone automatisch** um etwa 30 % durch eine Dezimation, die UV-, Material- und Normalen-Nähte berücksichtigt. Skin-Gewichte, Shader, Bounds und Metadaten bleiben erhalten.
 - **Optimiert Texturen automatisch** auf 512 px, bevor die `.ytd` geschrieben werden. Dabei bleiben Originalkompression und Mip-Kette erhalten (kein Re-Encoding, Farben und Alpha unverändert). Das Protokoll meldet die eingesparten MB.
 - Unterstützt **nur Vanilla**, **nur Addon-Packs** oder **beides**.
 - Mehrsprachige Oberfläche: **Englisch, Italienisch, Spanisch, Französisch, Deutsch**.

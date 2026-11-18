@@ -12,6 +12,7 @@ Whip Clothing Tool is a portable Windows app that exports GTA V clothing assets 
 
 - **Previews** — transparent PNG/WebP (or opaque JPEG) renders with a fixed camera angle and lighting, so every item is visually consistent. Every texture variant uses its own `.ytd` colours.
 - **Models** — exports `.ydr` + `.ytd` pairs, plus `.ybn` collision files when the source drawable actually contains collision bounds.
+- **Polygon optimization** — meshes are decimated by about 30% while respecting UV, material and normal seams; skin weights, shaders, collision bounds and metadata are preserved. Meshes under 200 triangles are left untouched.
 - **Automatic optimization** — textures are reduced to 512 px before writing `.ytd` files by dropping mip levels, without re-encoding; about 57% smaller texture files in testing, with colours and alpha unchanged. The saved MB are reported in the log.
 - **Sources** — vanilla GTA V Legacy RPFs, loose add-on folders (scanned recursively), or both.
 - **All variants** — every drawable and texture variation is exported automatically; names are generated from the source clothing file.
@@ -68,6 +69,7 @@ Whip Clothing Tool è un’app portable per Windows che esporta asset di abbigli
 
 - **Anteprime**: PNG/WebP trasparenti (o JPEG opaco) con angolazione e illuminazione fisse, così ogni capo è coerente. Ogni variante texture usa i colori del proprio `.ytd`.
 - **Modelli**: esporta coppie `.ydr` + `.ytd` e file di collisione `.ybn` solo quando il modello sorgente contiene bounds reali.
+- **Ottimizzazione poligoni**: le mesh vengono decimate di circa il 30% rispettando le cuciture UV, materiale e normali; pesi dello scheletro, shader, bounds di collisione e metadati restano intatti. Le mesh sotto 200 triangoli non vengono toccate.
 - **Ottimizzazione automatica**: le texture vengono ridotte a 512 px prima di scrivere i `.ytd`, eliminando livelli mip senza ricomprimere; nei test i file texture sono circa il 57% più piccoli, con colori e alpha invariati. I MB risparmiati sono riportati nel log.
 - **Sorgenti**: RPF di GTA V Legacy, cartelle addon sciolte (scansione ricorsiva), oppure entrambi.
 - **Tutte le varianti**: ogni drawable e ogni variazione texture viene esportata automaticamente; i nomi derivano dal file sorgente.
@@ -115,6 +117,7 @@ Whip Clothing Tool es una aplicación portable para Windows que exporta recursos
 
 - **Vistas previas**: PNG/WebP transparentes (o JPEG opaco) con ángulo e iluminación fijos, para que todas las prendas sean coherentes. Cada variante de textura usa los colores de su `.ytd`.
 - **Modelos**: exporta pares `.ydr` + `.ytd` y archivos de colisión `.ybn` solo cuando el modelo de origen contiene bounds reales.
+- **Optimización de polígonos**: las mallas se reducen alrededor de un 30 % respetando las costuras de UV, material y normales; se conservan pesos del esqueleto, shaders, límites de colisión y metadatos. Las mallas de menos de 200 triángulos no se modifican.
 - **Optimización automática**: las texturas se reducen a 512 px antes de escribir los `.ytd`, eliminando niveles mip sin recodificar; en las pruebas los archivos de textura son un 57 % más pequeños, con colores y alpha intactos. Los MB ahorrados se muestran en el registro.
 - **Fuentes**: RPF de GTA V Legacy, carpetas addon sueltas (escaneo recursivo) o ambas.
 - **Todas las variantes**: exporta automáticamente cada drawable y cada variación de textura; los nombres se generan desde el archivo de origen.
@@ -162,6 +165,7 @@ Whip Clothing Tool est une application portable Windows qui exporte des ressourc
 
 - **Aperçus** : PNG/WebP transparents (ou JPEG opaque) avec angle et éclairage fixes, pour que chaque vêtement soit cohérent. Chaque variante de texture utilise les couleurs de son propre `.ytd`.
 - **Modèles** : exporte des paires `.ydr` + `.ytd`, ainsi que des fichiers de collision `.ybn` uniquement lorsque le modèle source contient de vrais bounds.
+- **Optimisation des polygones** : les maillages sont décimés d’environ 30 % en respectant les coutures UV, matériau et normales ; poids du squelette, shaders, limites de collision et métadonnées sont conservés. Les maillages de moins de 200 triangles ne sont pas modifiés.
 - **Optimisation automatique** : les textures sont réduites à 512 px avant l’écriture des `.ytd` en supprimant des niveaux de mip sans réencodage ; lors des tests, les fichiers de texture sont environ 57 % plus petits, avec des couleurs et un alpha inchangés. Les MB économisés sont indiqués dans le journal.
 - **Sources** : RPF de GTA V Legacy, dossiers addon isolés (analyse récursive), ou les deux.
 - **Toutes les variantes** : chaque drawable et chaque variation de texture est exportée automatiquement ; les noms sont générés depuis le fichier source.
@@ -209,6 +213,7 @@ Whip Clothing Tool ist eine portable Windows-App, die GTA-V-Kleidungs-Assets fü
 
 - **Vorschauen** : transparente PNG/WebP-Bilder (oder deckendes JPEG) mit festem Blickwinkel und fester Beleuchtung, damit alle Items konsistent aussehen. Jede Texturvariante verwendet die Farben ihrer eigenen `.ytd`.
 - **Modelle** : exportiert `.ydr` + `.ytd`-Paare und `.ybn`-Kollisionsdateien nur dann, wenn das Quellmodell echte Bounds enthält.
+- **Polygon-Optimierung** : Meshes werden um etwa 30 % dezimiert, wobei UV-, Material- und Normalen-Nähte beachtet werden. Skin-Gewichte, Shader, Kollisionsgrenzen und Metadaten bleiben erhalten. Meshes unter 200 Dreiecken bleiben unverändert.
 - **Automatische Optimierung** : Texturen werden vor dem Schreiben der `.ytd` auf 512 px reduziert, indem Mip-Ebenen ohne Re-Encoding entfernt werden. Im Test waren die Texturdateien etwa 57 % kleiner, Farben und Alpha unverändert. Die eingesparten MB werden im Protokoll gemeldet.
 - **Quellen** : Vanilla-GTA-V-Legacy-RPFs, lose Addon-Ordner (rekursive Suche) oder beides.
 - **Alle Varianten** : jeder Drawable und jede Texturvariante wird automatisch exportiert; die Namen werden aus der Quelldatei erzeugt.

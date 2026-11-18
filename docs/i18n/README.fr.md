@@ -4,6 +4,7 @@ Whip Clothing Tool est une application de bureau Windows qui exporte des ressour
 
 - Génère des **aperçus** (même angle et même éclairage pour la cohérence) avec **fond transparent**, au **format** et à la **taille** choisis.
 - Exporte des **modèles prop** pour les vêtements lâchés/lancés : produit **`.ydr` + `.ytd`** (et fichiers de collision optionnels si pris en charge) dans un **dossier que vous choisissez**.
+- **Optimise automatiquement les polygones** d’environ 30 % avec une décimation qui respecte les coutures UV, matériau et normales ; poids du squelette, shaders, limites et métadonnées sont préservés.
 - **Optimise automatiquement les textures** à 512 px avant d’écrire les `.ytd`, en conservant la compression et la chaîne de mips d’origine (aucun réencodage : couleurs et alpha préservés). Le journal indique les MB économisés.
 - Prend en charge **vanilla uniquement**, **packs addon uniquement** ou **les deux**.
 - Interface multilingue : **Anglais, Italien, Espagnol, Français, Allemand**.

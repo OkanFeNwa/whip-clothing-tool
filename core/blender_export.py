@@ -25,7 +25,7 @@ import traceback
 from pathlib import Path, PurePosixPath
 
 import bpy
-from mathutils import Matrix, Vector
+from mathutils import Matrix, Quaternion, Vector
 
 try:
     import addon_utils  # type: ignore[import-untyped]
@@ -515,6 +515,153 @@ def render_preview(work_dir: Path, model_name: str, output: Path, job: dict, sou
 
 
 # ---------------------------------------------------------------------------
+# Polygon optimization
+# ---------------------------------------------------------------------------
+
+_POLY_STATS = {"meshes": 0, "before": 0, "after": 0}
+
+
+def triangles_in(asset) -> int:
+    total = 0
+    for models in (getattr(asset, "models", None) or {}).values():
+        for model in models:
+            for geo in getattr(model, "geometries", None) or []:
+                ib = getattr(geo, "index_buffer", None)
+                if ib is not None:
+                    total += len(ib) // 3
+    return total
+
+
+def add_temporary_skeleton(drawable) -> None:
+    """Give a skinned drawable a minimal skeleton so Sollumz keeps skin weights."""
+    ids = set()
+    for models in (getattr(drawable, "models", None) or {}).values():
+        for model in models:
+            for geo in getattr(model, "geometries", None) or []:
+                vb = getattr(geo, "vertex_buffer", None)
+                if vb is not None and "BlendIndices" in (vb.dtype.names or []):
+                    ids.update(int(x) for x in vb["BlendIndices"].ravel() if int(x) != 255)
+    if not ids:
+        return
+
+    from szio.gta5.drawables import Skeleton, SkelBone, SkelBoneFlags
+
+    real = sorted(ids)
+    drawable.skeleton = Skeleton([
+        SkelBone(
+            name=f"bone_{i:03d}",
+            tag=i,
+            flags=SkelBoneFlags(0),
+            position=Vector((0, 0, 0)),
+            rotation=Quaternion((1, 0, 0, 0)),
+            scale=Vector((1, 1, 1)),
+            parent_index=-1 if i == real[0] else 0,
+            translation_limit=None,
+            rotation_limit=None,
+        )
+        for i in real
+    ])
+
+
+def optimize_polygons(drawable, ratio: float) -> None:
+    """Decimate a drawable in place, preserving skin, UVs and shader indices.
+
+    Sollumz is used for the actual collapse (its deleter respects UV/material
+    seams), but only the resulting vertex/index buffers are copied back into
+    the original szio asset. That keeps the original skeleton, bounds, shader
+    group and other metadata untouched.
+    """
+    before = triangles_in(drawable)
+    if ratio >= 1.0 or before < 200:
+        return
+    ensure_sollumz()
+    original_skeleton = getattr(drawable, "skeleton", None)
+    try:
+        add_temporary_skeleton(drawable)
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp)
+            from szio import save_asset, try_load_asset
+            from szio.gta5.assets import AssetFormat, AssetTarget, AssetVersion, SaveOptions
+
+            targets = [AssetTarget(AssetFormat.NATIVE, AssetVersion.GEN8)]
+            save_asset(drawable, targets, work, "wct_src", SaveOptions())
+            clear_scene()
+            bpy.ops.sollumz.import_assets(
+                directory=str(work) + os.sep,
+                files=[{"name": "wct_src.ydr"}],
+                use_custom_settings=True,
+            )
+            meshes = [
+                o for o in bpy.context.scene.objects
+                if o.type == "MESH" and not is_collision(o)
+            ]
+            if not meshes:
+                return
+            for obj in meshes:
+                mod = obj.modifiers.new("WCTOptimize", "DECIMATE")
+                mod.ratio = ratio
+                mod.delimit = {"NORMAL", "UV", "MATERIAL"}
+                mod.use_collapse_triangulate = True
+                bpy.context.view_layer.objects.active = obj
+                bpy.ops.object.modifier_apply(modifier=mod.name)
+
+            bpy.ops.object.select_all(action="DESELECT")
+            for obj in meshes:
+                obj.select_set(True)
+            out_dir = work / "out"
+            out_dir.mkdir()
+            bpy.ops.sollumz.export_assets(
+                directory=str(out_dir) + os.sep,
+                target_formats={"NATIVE"},
+                target_versions={"GEN8"},
+                limit_to_selected=True,
+                use_custom_settings=True,
+                direct_export=True,
+                export_ytds=False,
+                export_ymaps=False,
+                export_ytyps=False,
+            )
+            products = sorted(out_dir.rglob("*.ydr"))
+            if not products:
+                return
+            optimized, _ = try_load_asset(str(products[0]), return_target=True)
+
+            def geometries_by_shader(asset):
+                result = {}
+                for models in (getattr(asset, "models", None) or {}).values():
+                    for model in models:
+                        for geo in getattr(model, "geometries", None) or []:
+                            result.setdefault(getattr(geo, "shader_index", 0), []).append(geo)
+                return result
+
+            candidates = geometries_by_shader(optimized)
+            for models in (getattr(drawable, "models", None) or {}).values():
+                for model in models:
+                    for geo in getattr(model, "geometries", None) or []:
+                        pool = candidates.get(getattr(geo, "shader_index", 0)) or []
+                        if not pool:
+                            continue
+                        new_geo = pool.pop(0)
+                        new_vb = getattr(new_geo, "vertex_buffer", None)
+                        old_vb = getattr(geo, "vertex_buffer", None)
+                        if new_vb is None or old_vb is None:
+                            continue
+                        if set(new_vb.dtype.names or []) != set(old_vb.dtype.names or []):
+                            continue
+                        geo.vertex_buffer = new_vb
+                        geo.index_buffer = new_geo.index_buffer
+                        _POLY_STATS["meshes"] += 1
+    except Exception as exc:
+        log("error", f"Polygon optimization skipped: {exc}")
+    finally:
+        drawable.skeleton = original_skeleton
+        after = triangles_in(drawable)
+        _POLY_STATS["before"] += before
+        _POLY_STATS["after"] += after
+        clear_scene()
+
+
+# ---------------------------------------------------------------------------
 # Source discovery
 # ---------------------------------------------------------------------------
 
@@ -872,7 +1019,12 @@ def export(job: dict) -> None:
     patch_szio_skeleton_loader()
     _OPT_YTD_CACHE.clear()
     _OPT_STATS.update(files=0, before=0, after=0)
+    _POLY_STATS.update(meshes=0, before=0, after=0)
     max_tex_size = int(job.get("maxTextureSize", 512) or 512)
+    try:
+        polygon_ratio = max(0.3, min(1.0, float(job.get("polygonRatio", 0.7) or 0.7)))
+    except (TypeError, ValueError):
+        polygon_ratio = 0.7
     from szio import save_asset, try_load_asset
     from szio.gta5.assets import AssetFormat, AssetTarget, AssetVersion, SaveOptions
 
@@ -907,13 +1059,21 @@ def export(job: dict) -> None:
     try:
         from szio import VPath  # used only to restore cache entries if needed
 
+        asset_cache: dict[str, object] = {}
         for index, task in enumerate(tasks, 1):
             label = f"{task['gender']} {task['part']} #{task['draw']:03d} / {task['slot']}"
             try:
-                loaded = try_load_asset(task["ydd"], return_target=True)
-                if not loaded:
-                    raise RuntimeError(f"Cannot load {task['yddName']}")
-                asset, _ = loaded
+                cache_key = source_string(task["ydd"])
+                asset = asset_cache.get(cache_key)
+                if asset is None:
+                    loaded = try_load_asset(task["ydd"], return_target=True)
+                    if not loaded:
+                        raise RuntimeError(f"Cannot load {task['yddName']}")
+                    asset, _ = loaded
+                    if polygon_ratio < 1.0:
+                        for _, source_drawable in (asset.drawables or {}).items():
+                            optimize_polygons(source_drawable, polygon_ratio)
+                    asset_cache[cache_key] = asset
                 drawables = list((asset.drawables or {}).items())
                 if not drawables:
                     raise RuntimeError(f"No drawables in {task['yddName']}")
@@ -1012,10 +1172,21 @@ def export(job: dict) -> None:
                 f"{before_mb:.1f} MB -> {after_mb:.1f} MB",
             )
 
+        if _POLY_STATS["meshes"]:
+            log(
+                "success",
+                f"Optimized {_POLY_STATS['meshes']} mesh(es): "
+                f"{_POLY_STATS['before']} -> {_POLY_STATS['after']} triangles",
+            )
+
         message = (
             f"Core completed: {exported_models} model(s), {exported_previews} preview(s), "
             f"{failed} failed."
         )
+        if _POLY_STATS["meshes"]:
+            message += (
+                f" Polygons: {_POLY_STATS['before']} -> {_POLY_STATS['after']}."
+            )
         if _OPT_STATS["files"]:
             message += (
                 f" Textures: {_OPT_STATS['before'] / 1_000_000:.1f} MB -> "
