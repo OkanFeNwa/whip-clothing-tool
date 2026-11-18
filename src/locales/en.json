@@ -1,0 +1,57 @@
+{
+  "app": {
+    "title": "Whip Clothing Tool",
+    "subtitle": "Export GTA V clothing previews and prop models for FiveM (WHIP)."
+  },
+  "language": {
+    "label": "Language"
+  },
+  "source": {
+    "label": "Source",
+    "vanilla": "Vanilla only",
+    "addon": "Addon packs only",
+    "both": "Both"
+  },
+  "paths": {
+    "gtavLegacy": "GTA V Legacy folder",
+    "gtavLegacyHint": "Required for vanilla extraction (folder containing GTA5.exe and update/x64).",
+    "addonFolders": "Addon pack folders",
+    "addonFoldersHint": "One or more folders that contain clothing .ydd/.ytd files (e.g. resources/[clothing]/...).",
+    "outputPreviews": "Output folder (previews)",
+    "outputModels": "Output folder (models)",
+    "browse": "Browse…",
+    "addFolder": "Add folder",
+    "remove": "Remove"
+  },
+  "previews": {
+    "title": "Previews (shop images)",
+    "size": "Image size (px)",
+    "sizeHint": "Square output, e.g. 256 or 512.",
+    "format": "Image format",
+    "transparentNote": "Background is always transparent when the format supports it (PNG/WebP).",
+    "run": "Generate previews (coming soon)"
+  },
+  "models": {
+    "title": "Prop models (drop / throw)",
+    "note": "Exports .ydr + .ytd to the chosen folder. Collision export is shown if supported by the pipeline.",
+    "run": "Export models (uses core/forge.py)",
+    "slot": "Slot (forge.py)",
+    "drawable": "Drawable index",
+    "texture": "Texture index",
+    "modelName": "Output model name (optional)"
+  },
+  "collisions": {
+    "label": "Export collisions when available",
+    "hint": "If your workflow provides .ybn/collision data, include it in the output folder. If not available, items may behave incorrectly in-game."
+  },
+  "status": {
+    "ready": "Ready.",
+    "missingPython": "Python not detected. Install Python 3.10+ or use the installer bundle.",
+    "missingGtav": "Select your GTA V Legacy folder for vanilla sources.",
+    "pickOutput": "Select an output folder first."
+  },
+  "footer": {
+    "docs": "Documentation",
+    "repoNote": "Private GitHub repo recommended. Do not commit local paths or secrets."
+  }
+}

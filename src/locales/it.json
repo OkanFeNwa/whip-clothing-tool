@@ -1,0 +1,57 @@
+{
+  "app": {
+    "title": "Whip Clothing Tool",
+    "subtitle": "Esporta anteprime abiti GTA V e modelli prop per FiveM (WHIP)."
+  },
+  "language": {
+    "label": "Lingua"
+  },
+  "source": {
+    "label": "Sorgente",
+    "vanilla": "Solo vanilla",
+    "addon": "Solo pack addon",
+    "both": "Entrambi"
+  },
+  "paths": {
+    "gtavLegacy": "Cartella GTA V Legacy",
+    "gtavLegacyHint": "Richiesta per l’estrazione vanilla (cartella con GTA5.exe e update/x64).",
+    "addonFolders": "Cartelle pack addon",
+    "addonFoldersHint": "Una o più cartelle con file .ydd/.ytd (es. resources/[clothing]/...).",
+    "outputPreviews": "Cartella di output (anteprime)",
+    "outputModels": "Cartella di output (modelli)",
+    "browse": "Sfoglia…",
+    "addFolder": "Aggiungi cartella",
+    "remove": "Rimuovi"
+  },
+  "previews": {
+    "title": "Anteprime (immagini negozio)",
+    "size": "Dimensione immagine (px)",
+    "sizeHint": "Output quadrato, es. 256 o 512.",
+    "format": "Formato immagine",
+    "transparentNote": "Sfondo sempre trasparente quando il formato lo supporta (PNG/WebP).",
+    "run": "Genera anteprime (presto)"
+  },
+  "models": {
+    "title": "Modelli prop (caduta / lancio)",
+    "note": "Esporta .ydr + .ytd nella cartella scelta. L’export collisioni viene mostrato se supportato.",
+    "run": "Esporta modelli (usa core/forge.py)",
+    "slot": "Slot (forge.py)",
+    "drawable": "Indice drawable",
+    "texture": "Indice texture",
+    "modelName": "Nome modello output (opzionale)"
+  },
+  "collisions": {
+    "label": "Esporta collisioni se disponibili",
+    "hint": "Se il flusso fornisce .ybn/collisioni, includile nell’output. Se non disponibili, l’oggetto potrebbe comportarsi male in gioco."
+  },
+  "status": {
+    "ready": "Pronto.",
+    "missingPython": "Python non rilevato. Installa Python 3.10+ oppure usa il bundle dell’installer.",
+    "missingGtav": "Seleziona la cartella GTA V Legacy per sorgenti vanilla.",
+    "pickOutput": "Seleziona prima una cartella di output."
+  },
+  "footer": {
+    "docs": "Documentazione",
+    "repoNote": "Consigliato repo GitHub privato. Non committare percorsi locali o segreti."
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "app": { "title": "Whip Clothing Tool", "subtitle": "Exporta vistas previas de ropa GTA V y modelos prop para FiveM (WHIP)." },
+  "language": { "label": "Idioma" },
+  "source": { "label": "Fuente", "vanilla": "Solo vanilla", "addon": "Solo packs addon", "both": "Ambos" },
+  "paths": {
+    "gtavLegacy": "Carpeta GTA V Legacy",
+    "gtavLegacyHint": "Necesaria para extraer vanilla (carpeta con GTA5.exe y update/x64).",
+    "addonFolders": "Carpetas de packs addon",
+    "addonFoldersHint": "Una o más carpetas con .ydd/.ytd (ej. resources/[clothing]/...).",
+    "outputPreviews": "Carpeta de salida (vistas previas)",
+    "outputModels": "Carpeta de salida (modelos)",
+    "browse": "Examinar…",
+    "addFolder": "Añadir carpeta",
+    "remove": "Quitar"
+  },
+  "previews": {
+    "title": "Vistas previas (tienda)",
+    "size": "Tamaño de imagen (px)",
+    "sizeHint": "Cuadrado, ej. 256 o 512.",
+    "format": "Formato de imagen",
+    "transparentNote": "Fondo transparente cuando el formato lo permite (PNG/WebP).",
+    "run": "Generar vistas previas (pronto)"
+  },
+  "models": {
+    "title": "Modelos prop (caída / lanzamiento)",
+    "note": "Exporta .ydr + .ytd a la carpeta elegida.",
+    "run": "Exportar modelos (usa core/forge.py)",
+    "slot": "Slot (forge.py)",
+    "drawable": "Índice drawable",
+    "texture": "Índice texture",
+    "modelName": "Nombre modelo salida (opcional)"
+  },
+  "collisions": { "label": "Exportar colisiones si hay", "hint": "Si el flujo genera .ybn, inclúyelos en la salida. Si no, el objeto puede fallar en el juego." },
+  "status": { "ready": "Listo.", "missingPython": "Python no detectado. Instala Python 3.10+ o usa el instalador.", "missingGtav": "Selecciona la carpeta GTA V Legacy para vanilla.", "pickOutput": "Selecciona primero una carpeta de salida." },
+  "footer": { "docs": "Documentación", "repoNote": "Repo GitHub privado recomendado. No subas rutas locales ni secretos." }
+}
