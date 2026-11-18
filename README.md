@@ -4,6 +4,7 @@ Whip Clothing Tool is a Windows **portable** desktop app to export GTA V clothin
 
 - Generate **preview images** with a fixed angle and lighting, transparent background, and selectable size/format.
 - Export **model files** as **`.ydr` + `.ytd`** (plus collision files when the source actually contains them).
+- **Automatically optimizes textures** to 512 px before writing `.ytd` files, using the source compression and its mip chain (no re-encoding, colours and alpha preserved). The log reports the total MB saved.
 - Support **vanilla** assets (GTA V Legacy RPFs), **addon packs** (loose `.ydd`/`.ytd` folders, scanned recursively), or **both**.
 - Export every drawable/texture variant automatically, with output names generated from the source clothing name.
 - Multi-language UI: **English, Italian, Spanish, French, German**.

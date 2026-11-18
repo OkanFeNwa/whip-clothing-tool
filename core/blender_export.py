@@ -13,6 +13,7 @@ NDJSON progress events prefixed with ``WCT_JSON:`` on stdout.
 
 from __future__ import annotations
 
+import io
 import json
 import math
 import os
@@ -282,6 +283,136 @@ def apply_diffuse_textures(dds_files: list[Path]) -> int:
     if fixed:
         log("info", f"Applied {fixed} diffuse texture(s) to imported materials")
     return fixed
+
+
+_OPT_YTD_CACHE: dict[tuple[str, int], bytes] = {}
+_OPT_STATS = {"files": 0, "before": 0, "after": 0}
+
+
+class _BytesDataSource:
+    """Minimal DataSource compatible with szio's texture importer."""
+
+    def __init__(self, data: bytes, name: str):
+        self.data = data
+        self.name = name
+
+    def read_bytes(self) -> bytes:
+        return self.data
+
+    def open(self):
+        return io.BytesIO(self.data)
+
+
+def downsample_uncompressed_dds(data: bytes, max_size: int):
+    """Downsample a mip-less uncompressed DDS by averaging 2x2 pixel blocks.
+
+    Returns ``(bytes, width, height)`` or ``None`` for compressed/unknown
+    formats, which cannot be resized safely without a full re-encode.
+    """
+    try:
+        import numpy as np
+        from szio.dds import DDS_HEADER, DdsFile, _format_layout, _mip_size
+
+        dds = DdsFile.from_buffer(bytearray(data))
+        block, bits = _format_layout(dds)
+        if block is not None or not bits or bits % 8:
+            return None
+        bpp = bits // 8
+        header_size = len(data) - len(dds.pixel_data)
+        width, height = dds.width, dds.height
+        pitch = (width * bits + 7) // 8
+        pixels = np.frombuffer(bytes(dds.pixel_data), dtype=np.uint8)[: pitch * height]
+        pixels = pixels.reshape(height, pitch)
+
+        while (width > max_size or height > max_size) and width > 2 and height > 2:
+            new_width, new_height = max(1, width // 2), max(1, height // 2)
+            cut = pixels[: new_height * 2, : new_width * 2 * bpp]
+            pixels = cut.reshape(new_height, 2, new_width, 2, bpp).mean(axis=(1, 3)).round().astype(np.uint8)
+            width, height = new_width, new_height
+
+        out = bytearray(data[:header_size]) + pixels.tobytes()
+        header = DDS_HEADER.from_buffer(out, 4)
+        header.dwWidth = width
+        header.dwHeight = height
+        header.dwMipMapCount = 1
+        header.dwPitchOrLinearSize = _mip_size(width, height, None, bits)
+        del header
+        return bytes(out), width, height
+    except Exception:
+        return None
+
+
+def optimized_ytd_bytes(source, max_size: int = 512) -> bytes:
+    """Return a .ytd whose textures are at most ``max_size`` pixels wide/tall.
+
+    First tries ``szio.dds.DdsFile.drop_mip()``, which discards the top mip and
+    keeps the original compression and mip chain. For textures without mips it
+    averages 2x2 blocks of uncompressed pixels. Neither path re-encodes with a
+    different format, so colours and alpha stay intact.
+    """
+    raw = read_bytes(source)
+    key = (source_string(source), int(max_size))
+    cached = _OPT_YTD_CACHE.get(key)
+    if cached is not None:
+        return cached
+
+    optimized = raw
+    try:
+        from szio import save_asset, try_load_asset
+        from szio.dds import DdsFile
+        from szio.gta5.assets import AssetFormat, AssetTarget, AssetVersion, SaveOptions
+
+        asset, _ = try_load_asset(source, return_target=True)
+        any_changed = False
+        for tex in (getattr(asset, "textures", {}) or {}).values():
+            try:
+                data = bytearray(read_bytes(tex.data))
+                dds = DdsFile.from_buffer(bytearray(data))
+                width, height = dds.width, dds.height
+                changed = False
+                while width > max_size or height > max_size:
+                    try:
+                        mips = dds.complete_mip_count()
+                    except Exception:
+                        break
+                    if mips <= 1:
+                        resized = downsample_uncompressed_dds(bytes(data), max_size)
+                        if resized:
+                            data, width, height = resized
+                            changed = True
+                        break
+                    data = bytearray(dds.drop_mip())
+                    dds = DdsFile.from_buffer(bytearray(data))
+                    width, height = dds.width, dds.height
+                    changed = True
+                if changed:
+                    tex.data = _BytesDataSource(bytes(data), f"{tex.name}.dds")
+                    tex.width = width
+                    tex.height = height
+                    any_changed = True
+            except Exception:
+                continue
+
+        if any_changed:
+            with tempfile.TemporaryDirectory() as tmp:
+                save_asset(
+                    asset,
+                    [AssetTarget(AssetFormat.NATIVE, AssetVersion.GEN8)],
+                    Path(tmp),
+                    "wct_optimized",
+                    SaveOptions(),
+                )
+                candidate = Path(tmp) / "wct_optimized.ytd"
+                if candidate.is_file() and candidate.stat().st_size:
+                    optimized = candidate.read_bytes()
+    except Exception as exc:
+        log("error", f"Cannot optimize texture {Path(str(source)).name}: {exc}")
+
+    _OPT_YTD_CACHE[key] = optimized
+    _OPT_STATS["files"] += 1
+    _OPT_STATS["before"] += len(raw)
+    _OPT_STATS["after"] += len(optimized)
+    return optimized
 
 
 def mesh_bounds():
@@ -739,6 +870,9 @@ def export(job: dict) -> None:
 
     ensure_sollumz()
     patch_szio_skeleton_loader()
+    _OPT_YTD_CACHE.clear()
+    _OPT_STATS.update(files=0, before=0, after=0)
+    max_tex_size = int(job.get("maxTextureSize", 512) or 512)
     from szio import save_asset, try_load_asset
     from szio.gta5.assets import AssetFormat, AssetTarget, AssetVersion, SaveOptions
 
@@ -799,9 +933,12 @@ def export(job: dict) -> None:
 
                             if tex:
                                 try:
-                                    (work / f"{base_name}.ytd").write_bytes(read_bytes(tex["source"]))
+                                    (work / f"{base_name}.ytd").write_bytes(
+                                        optimized_ytd_bytes(tex["source"], max_tex_size)
+                                    )
                                 except Exception as exc:
-                                    log("error", f"Cannot copy texture {tex['name']}: {exc}")
+                                    log("error", f"Cannot prepare texture {tex['name']}: {exc}")
+                                    (work / f"{base_name}.ytd").write_bytes(read_bytes(tex["source"]))
 
                             if job.get("exportCollisions", False):
                                 bounds = getattr(drawable, "bounds", None) or []
@@ -866,10 +1003,24 @@ def export(job: dict) -> None:
         )
         log("success", f"Manifest written: {manifest_path}")
 
+        if _OPT_STATS["files"]:
+            before_mb = _OPT_STATS["before"] / 1_000_000
+            after_mb = _OPT_STATS["after"] / 1_000_000
+            log(
+                "success",
+                f"Optimized {_OPT_STATS['files']} texture(s): "
+                f"{before_mb:.1f} MB -> {after_mb:.1f} MB",
+            )
+
         message = (
             f"Core completed: {exported_models} model(s), {exported_previews} preview(s), "
             f"{failed} failed."
         )
+        if _OPT_STATS["files"]:
+            message += (
+                f" Textures: {_OPT_STATS['before'] / 1_000_000:.1f} MB -> "
+                f"{_OPT_STATS['after'] / 1_000_000:.1f} MB."
+            )
         done(failed == 0, message)
     finally:
         shutil.rmtree(work_root, ignore_errors=True)
