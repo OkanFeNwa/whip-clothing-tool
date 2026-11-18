@@ -238,6 +238,28 @@ def extract_ytd_dds(ytd_path: Path, out_dir: Path) -> list[Path]:
     return files
 
 
+def ytd_texture_names(path: Path) -> list[str]:
+    """Return the real texture names stored inside a .ytd."""
+    try:
+        from szio import try_load_asset
+
+        asset, _ = try_load_asset(str(path), return_target=True)
+    except Exception:
+        return []
+    return [str(name) for name in (getattr(asset, "textures", {}) or {}).keys()]
+
+
+def patch_diffuse_sampler(drawable, texture_name: str) -> None:
+    """Bake the selected texture variation into the spawned prop's sampler."""
+    group = getattr(drawable, "shader_group", None)
+    if not group:
+        return
+    for shader in getattr(group, "shaders", []) or []:
+        for param in getattr(shader, "parameters", []) or []:
+            if str(getattr(param, "name", "")) == "diffusesampler":
+                param.value = texture_name
+
+
 def apply_diffuse_textures(dds_files: list[Path]) -> int:
     """Bind unpacked DDS files to the diffuse nodes Sollumz left unresolved."""
     if not dds_files:
@@ -662,6 +684,166 @@ def optimize_polygons(drawable, ratio: float) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Archetype (.ytyp) generation — makes models spawnable with RequestModel
+# ---------------------------------------------------------------------------
+
+def drawable_bounds(drawable):
+    """Return (bb_min, bb_max, bs_center, bs_radius) from all geometry vertices.
+
+    Uses the actual vertex buffer positions across every LOD, so the archetype
+    bounds match the exported .ydr even after polygon decimation.
+    """
+    import numpy as np
+
+    positions = []
+    for models in (getattr(drawable, "models", None) or {}).values():
+        for model in models:
+            for geo in getattr(model, "geometries", None) or []:
+                vb = getattr(geo, "vertex_buffer", None)
+                if vb is None or "Position" not in (vb.dtype.names or []):
+                    continue
+                pos = np.asarray(vb["Position"], dtype=np.float64)
+                if pos.size:
+                    positions.append(pos.reshape(-1, 3)[:, :3])
+    if not positions:
+        return None
+    all_pos = np.vstack(positions)
+    bb_min = all_pos.min(axis=0)
+    bb_max = all_pos.max(axis=0)
+    center = (bb_min + bb_max) / 2.0
+    radius = float(np.linalg.norm(bb_max - bb_min) / 2.0)
+    return bb_min, bb_max, center, radius
+
+
+def build_archetype(base_name: str, drawable):
+    """Create a BASE/DRAWABLE CBaseArchetypeDef for a static prop."""
+    from szio.gta5.archetypes import Archetype, ArchetypeAssetType, ArchetypeType
+    from szio.types import Vector
+
+    bounds = drawable_bounds(drawable)
+    if bounds is None:
+        return None
+    bb_min, bb_max, center, radius = bounds
+    return Archetype(
+        name=base_name,
+        type=ArchetypeType.BASE,
+        flags=32,  # static prop
+        lod_dist=100.0,
+        special_attribute=0,
+        hd_texture_dist=5.0,
+        texture_dictionary=base_name,
+        clip_dictionary="",
+        drawable_dictionary="",
+        physics_dictionary="",
+        bb_min=Vector([float(x) for x in bb_min]),
+        bb_max=Vector([float(x) for x in bb_max]),
+        bs_center=Vector([float(x) for x in center]),
+        bs_radius=radius,
+        asset_name=base_name,
+        asset_type=ArchetypeAssetType.DRAWABLE,
+        extensions=[],
+    )
+
+
+def write_ytyp(directory: Path, base_name: str, drawable, save_asset, targets) -> bool:
+    """Write one binary GEN8 .ytyp containing a single archetype for base_name."""
+    from szio.gta5.archetypes import AssetMapTypes
+    from szio.gta5.assets import SaveOptions
+
+    archetype = build_archetype(base_name, drawable)
+    if archetype is None:
+        return False
+    asset = AssetMapTypes(name=base_name, archetypes=[archetype])
+    save_asset(asset, targets, directory, base_name, SaveOptions())
+    return (directory / f"{base_name}.ytyp").is_file()
+
+
+_STATIC_SHADER_NAME = "normal_spec"
+_STATIC_SHADER_PRESET = "normal_spec.sps"
+
+
+def normalize_static_prop(drawable) -> int:
+    """Convert a ped-clothing drawable into a plain static-prop drawable.
+
+    The exported .ydr already has no skeleton/skin weights, but it still uses
+    ped shaders and ped vertex colours. Those are valid for the clothing system
+    but can prevent FiveM from treating the asset as a normal object. This
+    function rewrites the shader group to ``normal_spec.sps`` and resets the
+    vertex colours, without touching geometry or UVs.
+
+    Returns the number of shaders that were converted.
+    """
+    import numpy as np
+    from szio.gta5.drawables import RenderBucket, ShaderParameter
+    from szio.types import Vector
+
+    drawable.skeleton = None
+    for models in (getattr(drawable, "models", None) or {}).values():
+        for model in models:
+            model.has_skin = False
+            model.matrix_count = 0
+            model.bone_index = 0
+            for geo in getattr(model, "geometries", None) or []:
+                vb = getattr(geo, "vertex_buffer", None)
+                if vb is None:
+                    continue
+                names = list(vb.dtype.names or [])
+                drop = [n for n in ("BlendWeights", "BlendIndices") if n in names]
+                keep = [n for n in names if n not in drop]
+                if drop:
+                    new = np.empty(len(vb), dtype=[(n, vb.dtype[n]) for n in keep])
+                    for n in keep:
+                        new[n] = vb[n]
+                    vb = new
+                    geo.vertex_buffer = vb
+                if "Colour0" in (vb.dtype.names or []):
+                    vb["Colour0"] = np.array([255, 128, 0, 255], dtype=vb["Colour0"].dtype)
+                if "Colour1" in (vb.dtype.names or []):
+                    vb["Colour1"] = 0
+
+    shader_group = getattr(drawable, "shader_group", None)
+    if shader_group is None or not shader_group.shaders:
+        return 0
+
+    for shader in shader_group.shaders:
+        old = {str(p.name).lower(): p.value for p in shader.parameters}
+        diffuse = str(old.get("diffusesampler", "") or "")
+        bump = str(old.get("bumpsampler", "") or diffuse)
+        spec = str(old.get("specsampler", "") or diffuse)
+        shader.name = _STATIC_SHADER_NAME
+        shader.preset_filename = _STATIC_SHADER_PRESET
+        shader.render_bucket = RenderBucket.OPAQUE
+        shader.parameters = [
+            ShaderParameter("diffusesampler", diffuse),
+            ShaderParameter("bumpsampler", bump),
+            ShaderParameter("specsampler", spec),
+            ShaderParameter("hardalphablend", Vector((1.0, 0.0, 0.0, 0.0))),
+            ShaderParameter("usetessellation", Vector((0.0, 0.0, 0.0, 0.0))),
+            ShaderParameter("wetnessmultiplier", Vector((1.0, 0.0, 0.0, 0.0))),
+            ShaderParameter("bumpiness", Vector((1.0, 0.0, 0.0, 0.0))),
+            ShaderParameter("specmapintmask", Vector((1.0, 0.0, 0.0, 0.0))),
+            ShaderParameter("specularintensitymult", Vector((1.0, 0.0, 0.0, 0.0))),
+            ShaderParameter("specularfalloffmult", Vector((100.0, 0.0, 0.0, 0.0))),
+            ShaderParameter("specularfresnel", Vector((0.75, 0.0, 0.0, 0.0))),
+        ]
+    return len(shader_group.shaders)
+
+
+def write_fxmanifest(out_root: Path, model_names: list[str]) -> None:
+    """Write a resource fxmanifest registering every generated .ytyp."""
+    lines = [
+        "fx_version 'cerulean'",
+        "game 'gta5'",
+        "this_is_a_map 'yes'",
+        "",
+    ]
+    for name in sorted(set(model_names)):
+        lines.append(f"data_file 'DLC_ITYP_REQUEST' 'stream/{name}.ytyp'")
+    out_root.mkdir(parents=True, exist_ok=True)
+    (out_root / "fxmanifest.lua").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+# ---------------------------------------------------------------------------
 # Source discovery
 # ---------------------------------------------------------------------------
 
@@ -838,23 +1020,57 @@ def categories_for_part(part: str, model_cats: list[str], preview_cats: list[str
     return result
 
 
-def source_preference(src) -> tuple:
-    """Rank sources so one canonical file wins over DLC duplicates."""
+def source_preference(src, item: dict | None = None) -> tuple:
+    """Rank sources so the file the ped actually wears wins over duplicates.
+
+    For freemode props (``p_head``, ``p_eyes``, ...) the drawable index is the
+    number in the filename and the ped uses the base file from
+    ``streamedpedprops.rpf/mp_[mf]_freemode_01_p/p_<part>_NNN.ydd``.
+    Themed DLC packs and loose add-ons often ship a file with the same name but
+    a completely different model (e.g. a Christmas helmet instead of the base
+    hat). Those must never win over the base source.
+    """
     value = source_string(src).lower()
+    item = item or {}
+    part = str(item.get("part", "")).lower()
+    body = str(item.get("body", "")).lower()
+    is_prop = part.startswith("p_") or "/p_head_" in value or "/p_eyes_" in value
+
+    if is_prop:
+        if (
+            "streamedpedprops.rpf" in value
+            and ("/mp_m_freemode_01_p/" in value or "/mp_f_freemode_01_p/" in value)
+        ):
+            return (0, value)  # canonical base prop
+        if ".rpf/" not in value and body in ("mp_m_freemode_01_p", "mp_f_freemode_01_p"):
+            return (1, value)  # loose copy of the base prop
+        if "mppatches_p.rpf" in value:
+            return (2, value)  # patch variant, not what the ped wears
+        return (3, value)  # themed DLC variants (only used when base is absent)
+
     if ".rpf/" not in value:
-        return (0, value)  # loose add-on file
-    if "/mp_m_freemode_01_p/" in value or "/mp_f_freemode_01_p/" in value:
-        return (1, value)  # base freemode props from the patch DLC
+        return (0, value)  # loose add-on clothing file
+    if "/mp_m_freemode_01/" in value or "/mp_f_freemode_01/" in value:
+        return (1, value)
     if "x64w.rpf" in value or "x64v.rpf" in value:
         return (2, value)
-    return (3, value)  # themed DLC variants
+    return (3, value)
+
+
+def is_base_prop_source(src) -> bool:
+    """True for the canonical freemode prop folder inside streamedpedprops.rpf."""
+    value = source_string(src).lower()
+    return (
+        "streamedpedprops.rpf" in value
+        and ("/mp_m_freemode_01_p/" in value or "/mp_f_freemode_01_p/" in value)
+    )
 
 
 def dedupe_sources(items: list[dict], key_fn, label: str) -> list[dict]:
     best: dict[tuple, tuple[tuple, dict]] = {}
     for item in items:
         key = key_fn(item)
-        rank = source_preference(item["source"])
+        rank = source_preference(item["source"], item)
         if key not in best or rank < best[key][0]:
             best[key] = (rank, item)
     if len(best) != len(items):
@@ -893,6 +1109,22 @@ def build_tasks(job: dict, ydds: list, ytds: list, out_root: Path) -> list[dict]
         textures = ytd_by_key.get(
             (item["gender"], item["part"], item["draw"], item["collection"]), []
         ) or ytd_by_key.get((item["gender"], item["part"], item["draw"], "*"), [])
+
+        # For drawables that come from the canonical base prop file, the ped
+        # only uses texture variants a-h (indices 0-7) from that same folder.
+        # Higher indices exist only in unrelated DLC packs and used to put
+        # Christmas colours on the base hat. The wheel registry falls back to
+        # texture 0, so those variants are deliberately not exported.
+        if (
+            item["part"] in ("p_head", "p_eyes")
+            and item["collection"] == "np"
+            and is_base_prop_source(item["source"])
+        ):
+            textures = [
+                t for t in textures
+                if t["texIndex"] <= 7 and is_base_prop_source(t["source"])
+            ]
+
         textures = sorted(textures, key=lambda t: (t["texIndex"], t["name"])) or [None]
         for cat, kind in pairs:
             folder, slot, _ = CATEGORIES[cat]
@@ -1054,7 +1286,9 @@ def export(job: dict) -> None:
     manifest: list[dict] = []
     exported_models = 0
     exported_previews = 0
+    exported_ytyps = 0
     failed = 0
+    stream_names: dict[Path, set[str]] = {}
 
     try:
         from szio import VPath  # used only to restore cache entries if needed
@@ -1109,6 +1343,15 @@ def export(job: dict) -> None:
                                     except Exception as exc:
                                         log("error", f"Collision export failed for {base_name}: {exc}")
 
+                            ytyp_ok = False
+                            if task["kind"] == "models":
+                                try:
+                                    ytyp_ok = write_ytyp(
+                                        work, base_name, drawable, save_asset, targets
+                                    )
+                                except Exception as exc:
+                                    log("error", f"Archetype export failed for {base_name}: {exc}")
+
                             row = {
                                 "category": task["category"],
                                 "kind": task["kind"],
@@ -1119,17 +1362,59 @@ def export(job: dict) -> None:
                             if task["kind"] == "models":
                                 target_dir = task["modelDir"]
                                 target_dir.mkdir(parents=True, exist_ok=True)
-                                for ext in (".ydr", ".ytd", ".ybn"):
+                                for ext in (".ydr", ".ytd", ".ybn", ".ytyp"):
                                     for f in work.glob(f"*{ext}"):
                                         shutil.copy2(f, target_dir / f.name)
                                 if (target_dir / f"{base_name}.ydr").is_file():
                                     exported_models += 1
+                                    if ytyp_ok and (target_dir / f"{base_name}.ytyp").is_file():
+                                        exported_ytyps += 1
                                     row["outputs"] = [
                                         source_string(p) for p in sorted(target_dir.glob(f"{base_name}.*"))
                                     ]
                                 else:
                                     failed += 1
                                     log("error", f"Model file was not produced: {base_name}.ydr")
+
+                                if ytyp_ok and (target_dir / f"{base_name}.ytyp").is_file():
+                                    resource_root = target_dir.parents[3]
+                                    stream_dir = resource_root / "stream"
+                                    stream_dir.mkdir(parents=True, exist_ok=True)
+                                    spawn_dir = work / "spawn"
+                                    spawn_dir.mkdir(exist_ok=True)
+                                    try:
+                                        import copy
+
+                                        spawn_drawable = copy.deepcopy(drawable)
+                                        normalize_static_prop(spawn_drawable)
+                                        names = ytd_texture_names(work / f"{base_name}.ytd")
+                                        texture_name = next(
+                                            (n for n in names if "_diff_" in n.lower()),
+                                            names[0] if len(names) == 1 else None,
+                                        )
+                                        if texture_name:
+                                            patch_diffuse_sampler(spawn_drawable, texture_name)
+                                        save_asset(
+                                            spawn_drawable, targets, spawn_dir,
+                                            base_name, SaveOptions()
+                                        )
+                                        shutil.copy2(
+                                            spawn_dir / f"{base_name}.ydr",
+                                            stream_dir / f"{base_name}.ydr",
+                                        )
+                                    except Exception as exc:
+                                        log(
+                                            "error",
+                                            f"Static prop conversion failed for {base_name}: {exc}",
+                                        )
+                                        shutil.copy2(
+                                            work / f"{base_name}.ydr",
+                                            stream_dir / f"{base_name}.ydr",
+                                        )
+                                    for ext in (".ytd", ".ytyp"):
+                                        for f in work.glob(f"*{ext}"):
+                                            shutil.copy2(f, stream_dir / f.name)
+                                    stream_names.setdefault(resource_root, set()).add(base_name)
                             else:
                                 target_dir = task["previewDir"]
                                 ext = str(job.get("imgFormat", "png")).lower()
@@ -1163,6 +1448,14 @@ def export(job: dict) -> None:
         )
         log("success", f"Manifest written: {manifest_path}")
 
+        for resource_root, names in sorted(stream_names.items()):
+            write_fxmanifest(resource_root, list(names))
+            log(
+                "success",
+                f"Spawnable resource ready: {resource_root} "
+                f"({len(names)} archetype(s), fxmanifest + stream/)",
+            )
+
         if _OPT_STATS["files"]:
             before_mb = _OPT_STATS["before"] / 1_000_000
             after_mb = _OPT_STATS["after"] / 1_000_000
@@ -1180,8 +1473,8 @@ def export(job: dict) -> None:
             )
 
         message = (
-            f"Core completed: {exported_models} model(s), {exported_previews} preview(s), "
-            f"{failed} failed."
+            f"Core completed: {exported_models} model(s), {exported_ytyps} archetype(s), "
+            f"{exported_previews} preview(s), {failed} failed."
         )
         if _POLY_STATS["meshes"]:
             message += (

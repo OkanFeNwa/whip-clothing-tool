@@ -43,6 +43,14 @@ powershell -ExecutionPolicy Bypass -File .\install-dependencies.ps1
 
 El script detecta Blender, instala la última extensión de Sollumz desde el release oficial de GitHub, la habilita y verifica `szio`/`pymateria` dentro de Blender. Con `-Dev` instala también Node.js, Rust y Visual Studio Build Tools para recompilar la app.
 
+## Modelos generables
+Cada modelo en `stream/` es un objeto estático normalizado (`normal_spec.sps`, Color 1 `#FF8000`, Color 2 `#000000`) con un `.ytyp` binario GEN8 y una línea `DLC_ITYP_REQUEST` en el `fxmanifest.lua` generado. Los archivos en `img/clothing/` conservan los shaders ped originales para el sistema de ropa de WHIP. Los props se toman siempre del archivo base `streamedpedprops.rpf/mp_[mf]_freemode_01_p/`, no de la primera DLC con el mismo nombre. Solo se exportan las texturas base `a`–`h` (índices 0–7); los demás usan el fallback de textura 0 del registro. El nombre real de la textura se escribe en el `diffusesampler` del objeto.
+
+Copia `models/whip_media_clothing_<género>/` en `resources/` y arráncalo en `server.cfg`. **Después de añadir o reemplazar archivos en `stream/`, todos los clientes deben reconectarse por completo**: `refresh` + `restart` no actualizan los archivos ya descargados. Si `RequestModel` sigue fallando tras una reconexión limpia, la app usa `prop_cap_01` como último recurso.
+
+## Registro de exportación
+La app escribe toda la salida en `<output root>/wct_export.log`. Las advertencias DDS no fatales de Blender se conservan en el archivo pero se ocultan en la interfaz.
+
 ## Colisiones
 Dependen de `.ybn`/bounds. Si están disponibles, inclúyelas en la salida; si no, la app lo avisará.
 

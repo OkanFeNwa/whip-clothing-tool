@@ -2,9 +2,10 @@ use serde::Deserialize;
 use serde::Serialize;
 use std::env;
 use std::fs;
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+use std::sync::{Arc, Mutex};
 use std::thread;
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
@@ -59,6 +60,15 @@ pub enum CoreEvent {
     Log { level: String, message: String },
     #[serde(rename = "done")]
     Done { ok: bool, message: String },
+}
+
+/// Blender's DDS cache prints these for every mip-less texture. They are
+/// harmless (Sollumz falls back to uncompressed DDS and renders correctly),
+/// but the word "failed" makes the export log look broken.
+fn is_noisy_blender_warning(line: &str) -> bool {
+    let lower = line.to_lowercase();
+    (lower.contains("dds image") && lower.contains("failed to load data"))
+        || (lower.contains("dds image") && lower.contains("falling back to uncompressed"))
 }
 
 fn category_to_folder(cat: &str) -> Option<&'static str> {
@@ -277,6 +287,23 @@ async fn export_assets(app: AppHandle, window: Window, payload: ExportAssetsPayl
     };
     let job_file = write_job_file(&job)?;
 
+    // Persist the full export log next to the outputs so it can be inspected
+    // after the app is closed. Both stdout (worker events) and stderr (Blender
+    // diagnostics) are appended here.
+    let log_path = PathBuf::from(&payload.out_root).join("wct_export.log");
+    let log_file = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_path)
+        .ok()
+        .map(Mutex::new)
+        .map(Arc::new);
+    if let Some(writer) = &log_file {
+        if let Ok(mut f) = writer.lock() {
+            let _ = writeln!(f, "\n===== export started =====");
+        }
+    }
+
     emit(&window, ProgressEvent::Started { message: "Starting Blender core process".into(), total: 1 });
 
     let mut command = Command::new(&blender);
@@ -300,10 +327,15 @@ async fn export_assets(app: AppHandle, window: Window, payload: ExportAssetsPayl
 
     let stderr = child.stderr.take().ok_or_else(|| "No stderr from Blender core".to_string())?;
     let stderr_window = window.clone();
+    let stderr_log = log_file.clone();
     let stderr_thread = thread::spawn(move || {
         for line in BufReader::new(stderr).lines().flatten() {
             let line = line.trim();
             if line.is_empty() { continue; }
+            if let Some(writer) = &stderr_log {
+                if let Ok(mut f) = writer.lock() { let _ = writeln!(f, "[blender] {}", line); }
+            }
+            if is_noisy_blender_warning(line) { continue; }
             let lower = line.to_lowercase();
             // Blender prints non-fatal texture-cache warnings as ERROR; keep them
             // visible but do not paint the whole log red. Real failures come from
@@ -319,6 +351,9 @@ async fn export_assets(app: AppHandle, window: Window, payload: ExportAssetsPayl
     for line in BufReader::new(stdout).lines().flatten() {
         let original = line.trim();
         if original.is_empty() { continue; }
+        if let Some(writer) = &log_file {
+            if let Ok(mut f) = writer.lock() { let _ = writeln!(f, "{}", original); }
+        }
         let line = original.strip_prefix("WCT_JSON:").unwrap_or(original);
         match serde_json::from_str::<CoreEvent>(line) {
             Ok(CoreEvent::Progress { message, current, total }) => {
@@ -342,14 +377,23 @@ async fn export_assets(app: AppHandle, window: Window, payload: ExportAssetsPayl
     let _ = stderr_thread.join();
     let _ = fs::remove_file(&job_file);
 
+    let log_note = format!("Export log saved to {}", log_path.display());
+    if let Some(writer) = &log_file {
+        if let Ok(mut f) = writer.lock() {
+            let _ = writeln!(f, "===== export finished: {} =====", final_message);
+        }
+    }
+    emit(&window, ProgressEvent::Log { level: "info".into(), message: log_note.clone() });
+
     if !status.success() || !core_ok {
         let err = if final_message.is_empty() { format!("Core exited with status {}", status) } else { final_message };
         emit(&window, ProgressEvent::Finished { message: err.clone(), ok: false });
         return Err(err);
     }
 
-    emit(&window, ProgressEvent::Finished { message: final_message.clone(), ok: true });
-    Ok(final_message)
+    let finished = format!("{} {}", final_message, log_note);
+    emit(&window, ProgressEvent::Finished { message: finished.clone(), ok: true });
+    Ok(finished)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

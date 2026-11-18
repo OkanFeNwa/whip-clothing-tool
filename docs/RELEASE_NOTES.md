@@ -47,16 +47,28 @@ If Blender is not on `PATH`, set the `WCT_BLENDER` environment variable to your 
 
 ```text
 <output root>/
-  models/whip_media_clothing_<male|female>/img/clothing/<gender>/<slot>/
+  models/whip_media_clothing_<male|female>/
+    fxmanifest.lua
+    stream/<model>.ydr / .ytd / .ytyp
+    img/clothing/<gender>/<slot>/...
   previews/whip_media_clothing_<male|female>/img/clothing/<gender>/<slot>/
   export_manifest.json
+  wct_export.log
 ```
+
+### Spawnable models
+
+Each model in `stream/` is a normalised static prop (`normal_spec.sps`, `Color 1 = #FF8000`, `Color 2 = #000000`) with a binary GEN8 `.ytyp` archetype (flags 32, lodDist 100, hdTextureDist 5, bounds from the real vertices). The generated `fxmanifest.lua` contains `this_is_a_map 'yes'` and one `data_file 'DLC_ITYP_REQUEST' 'stream/<model>.ytyp'` line per model. Copy the resource into `resources/` and start it in `server.cfg`.
+
+**After adding or replacing files in `stream/`, every client must fully reconnect** — `refresh` + `restart` does not update files already cached by the client. If `RequestModel` still fails after a clean reconnect, the tool falls back to `prop_cap_01`.
 
 ### Notes
 
 - The first vanilla run builds an RPF index inside `<output root>/.wct_cache/`; it can take a few minutes, later runs reuse the cache.
 - Collisions are only written when the source contains real bounds; no placeholder collision is invented.
 - JPEG does not support transparency. Use PNG or WebP for transparent previews.
+- Props are taken from the base `streamedpedprops.rpf/mp_[mf]_freemode_01_p/` files the ped actually wears. DLC packs with the same filename are ignored unless the drawable does not exist in the base set — this fixes exporting a themed helmet instead of the base hat. Only base texture variants `a`–`h` (indices 0–7) are exported; higher indices are left to the registry's texture-0 fallback. The real `.ytd` texture name is baked into the spawned prop's `diffusesampler`.
+- The full export log is appended to `<output root>/wct_export.log`. Harmless Blender DDS cache warnings are recorded there but hidden in the app.
 - All input/output paths are selected in the app. The build contains no game, server or user paths.
 
 ---
@@ -100,11 +112,19 @@ Non serve Python di sistema: il lavoro reale gira dentro Blender, che fornisce g
 
 Se Blender non è in `PATH`, imposta la variabile d’ambiente `WCT_BLENDER` con il percorso di `blender.exe`.
 
+### Modelli spawnabili
+
+Ogni modello in `stream/` è un prop statico normalizzato (`normal_spec.sps`, Color 1 `#FF8000`, Color 2 `#000000`) con un archetype `.ytyp` binario GEN8 (flags 32, lodDist 100, hdTextureDist 5, bounds dai vertici reali). L'`fxmanifest.lua` generato contiene `this_is_a_map 'yes'` e una riga `data_file 'DLC_ITYP_REQUEST' 'stream/<modello>.ytyp'` per ogni modello. Copia la resource in `resources/` e avviala in `server.cfg`.
+
+**Dopo aver aggiunto o sostituito file in `stream/`, ogni client deve riconnettersi completamente**: `refresh` + `restart` non aggiornano i file già scaricati. Se `RequestModel` fallisce ancora dopo una riconnessione pulita, l'app usa `prop_cap_01` come ultima risorsa.
+
 ### Note
 
 - La prima esecuzione vanilla crea l’indice RPF in `<output root>/.wct_cache/`; può volerci qualche minuto, poi viene riutilizzato.
 - Le collisioni vengono scritte solo se la sorgente contiene bounds reali.
 - JPEG non supporta la trasparenza: usa PNG o WebP.
+- I prop vengono presi dai file base `streamedpedprops.rpf/mp_[mf]_freemode_01_p/` che il ped indossa davvero. Le DLC con lo stesso nome vengono ignorate salvo quando il drawable non esiste nel set base: così non esce più un casco tematico al posto del cappello base. Vengono esportate solo le varianti texture base `a`–`h` (indici 0–7); gli indici superiori usano il fallback texture 0 del registry. Il nome reale della texture nel `.ytd` viene scritto nel `diffusesampler` del prop spawnato.
+- Il log completo viene scritto in `<output root>/wct_export.log`; i warning DDS non fatali di Blender sono nel file ma nascosti nell’app.
 - Tutti i percorsi si scelgono nell’app: la build non contiene percorsi di gioco, server o utente.
 
 ---
@@ -148,11 +168,19 @@ No se necesita Python del sistema: el trabajo real se ejecuta dentro de Blender,
 
 Si Blender no está en `PATH`, define la variable de entorno `WCT_BLENDER` con la ruta a `blender.exe`.
 
+### Modelos instanciables
+
+Cada modelo en `stream/` es un objeto estático normalizado (`normal_spec.sps`, Color 1 `#FF8000`, Color 2 `#000000`) con un arquetipo `.ytyp` binario GEN8 (flags 32, lodDist 100, hdTextureDist 5, bounds de los vértices reales). El `fxmanifest.lua` generado contiene `this_is_a_map 'yes'` y una línea `data_file 'DLC_ITYP_REQUEST' 'stream/<modelo>.ytyp'` por modelo. Copia el resource en `resources/` y arráncalo en `server.cfg`.
+
+**Después de añadir o reemplazar archivos en `stream/`, todos los clientes deben reconectarse por completo**: `refresh` + `restart` no actualizan los archivos ya descargados. Si `RequestModel` sigue fallando tras una reconexión limpia, la app usa `prop_cap_01` como último recurso.
+
 ### Notas
 
 - La primera ejecución con fuente vanilla crea el índice RPF en `<output root>/.wct_cache/`; puede tardar unos minutos, después se reutiliza.
 - Las colisiones solo se escriben si la fuente contiene bounds reales.
 - JPEG no admite transparencia: usa PNG o WebP.
+- Los props se toman de los archivos base `streamedpedprops.rpf/mp_[mf]_freemode_01_p/` que el ped usa realmente. Las DLC con el mismo nombre se ignoran salvo que el drawable no exista en el conjunto base: así no se exporta un casco temático en lugar del sombrero base. Solo se exportan las variantes de textura base `a`–`h` (índices 0–7); los índices superiores usan el fallback de textura 0 del registro. El nombre real de la textura del `.ytd` se escribe en el `diffusesampler` del objeto generado.
+- El registro completo se guarda en `<output root>/wct_export.log`; las advertencias DDS no fatales de Blender quedan en el archivo pero se ocultan en la app.
 - Todas las rutas se eligen en la app: la compilación no contiene rutas de juego, servidor ni usuario.
 
 ---
@@ -196,11 +224,19 @@ Aucun Python système requis : le travail réel s’exécute dans Blender, qui f
 
 Si Blender n’est pas dans `PATH`, définissez la variable d’environnement `WCT_BLENDER` avec le chemin vers `blender.exe`.
 
+### Modèles instanciables
+
+Chaque modèle dans `stream/` est un objet statique normalisé (`normal_spec.sps`, Color 1 `#FF8000`, Color 2 `#000000`) avec un archétype `.ytyp` binaire GEN8 (flags 32, lodDist 100, hdTextureDist 5, bounds issus des vrais sommets). Le `fxmanifest.lua` généré contient `this_is_a_map 'yes'` et une ligne `data_file 'DLC_ITYP_REQUEST' 'stream/<modèle>.ytyp'` par modèle. Copiez la ressource dans `resources/` et démarrez-la dans `server.cfg`.
+
+**Après avoir ajouté ou remplacé des fichiers dans `stream/`, chaque client doit se reconnecter entièrement** : `refresh` + `restart` ne mettent pas à jour les fichiers déjà téléchargés. Si `RequestModel` échoue encore après une reconnexion propre, l’application utilise `prop_cap_01` en dernier recours.
+
 ### Remarques
 
 - Le premier passage avec la source vanilla crée l’index RPF dans `<output root>/.wct_cache/` ; cela peut prendre quelques minutes, les passages suivants réutilisent le cache.
 - Les collisions ne sont écrites que si la source contient de vrais bounds.
 - JPEG ne gère pas la transparence : utilisez PNG ou WebP.
+- Les props proviennent des fichiers de base `streamedpedprops.rpf/mp_[mf]_freemode_01_p/` que le ped porte réellement. Les DLC portant le même nom sont ignorées sauf si le drawable n’existe pas dans le jeu de base : plus de casque thématique à la place du chapeau de base. Seules les variantes de texture de base `a`–`h` (indices 0–7) sont exportées ; les indices supérieurs utilisent le repli texture 0 du registre. Le vrai nom de texture du `.ytd` est écrit dans le `diffusesampler` de l’objet instancié.
+- Le journal complet est écrit dans `<output root>/wct_export.log` ; les avertissements DDS non fatals de Blender y sont conservés mais masqués dans l’app.
 - Tous les chemins sont choisis dans l’app : la compilation ne contient aucun chemin de jeu, de serveur ou d’utilisateur.
 
 ---
@@ -244,9 +280,17 @@ Es ist kein System-Python nötig: die eigentliche Arbeit läuft in Blender, das 
 
 Falls Blender nicht in `PATH` liegt, setze die Umgebungsvariable `WCT_BLENDER` auf den Pfad von `blender.exe`.
 
+### Spawnbare Modelle
+
+Jedes Modell in `stream/` ist ein normalisiertes statisches Objekt (`normal_spec.sps`, Color 1 `#FF8000`, Color 2 `#000000`) mit einem binären GEN8-`.ytyp`-Archetyp (flags 32, lodDist 100, hdTextureDist 5, Bounds aus den echten Vertizes). Das erzeugte `fxmanifest.lua` enthält `this_is_a_map 'yes'` und eine `data_file 'DLC_ITYP_REQUEST' 'stream/<Modell>.ytyp'`-Zeile pro Modell. Kopiere die Ressource nach `resources/` und starte sie in der `server.cfg`.
+
+**Nach dem Hinzufügen oder Ersetzen von Dateien in `stream/` muss jeder Client die Verbindung vollständig trennen und neu verbinden**: `refresh` + `restart` aktualisieren bereits heruntergeladene Dateien nicht. Falls `RequestModel` nach einer sauberen Wiederverbindung weiterhin scheitert, verwendet die App `prop_cap_01` als letzten Ausweg.
+
 ### Hinweise
 
 - Der erste Lauf mit Vanilla-Quelle erstellt den RPF-Index in `<output root>/.wct_cache/`; das kann einige Minuten dauern, danach wird der Cache genutzt.
 - Kollisionen werden nur geschrieben, wenn die Quelle echte Bounds enthält.
 - JPEG unterstützt keine Transparenz: für transparente Vorschauen PNG oder WebP verwenden.
+- Props stammen aus den Basisdateien `streamedpedprops.rpf/mp_[mf]_freemode_01_p/`, die der Ped tatsächlich trägt. DLC-Dateien mit demselben Namen werden ignoriert, es sei denn, der Drawable existiert nicht im Basis-Set — so wird kein Themen-Helm statt der Basismütze exportiert. Es werden nur die Basis-Texturvarianten `a`–`h` (Indizes 0–7) exportiert; höhere Indizes nutzen den Textur-0-Fallback der Registry. Der echte Texturname aus dem `.ytd` wird in den `diffusesampler` des gespawnten Objekts geschrieben.
+- Das vollständige Export-Protokoll liegt in `<output root>/wct_export.log`; harmlose Blender-DDS-Warnungen stehen in der Datei, werden aber in der App ausgeblendet.
 - Alle Pfade werden in der App gewählt: der Build enthält keine Spiel-, Server- oder Benutzerpfade.

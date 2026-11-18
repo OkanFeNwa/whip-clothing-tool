@@ -46,10 +46,50 @@ Choose one output root. The app splits it into:
 
 ```text
 <output root>/
-  models/whip_media_clothing_<male|female>/img/clothing/<gender>/<slot>/
+  models/whip_media_clothing_<male|female>/
+    fxmanifest.lua
+    stream/<model>.ydr
+    stream/<model>.ytd
+    stream/<model>.ytyp
+    img/clothing/<gender>/<slot>/...
   previews/whip_media_clothing_<male|female>/img/clothing/<gender>/<slot>/
   export_manifest.json
+  wct_export.log
 ```
+
+The files under `img/clothing/` keep the original ped shaders for the WHIP clothing system. The files under `stream/` are normalised static props (`normal_spec.sps`, `Color 1 = #FF8000`, `Color 2 = #000000`) with a binary GEN8 `.ytyp` archetype each, so they can be spawned with `RequestModel()` / `CreateObject()`.
+
+### Source selection for props
+
+Freemode props are resolved from the **base** file the ped actually wears, not from the first DLC with a matching name:
+
+- `streamedpedprops.rpf/mp_m_freemode_01_p/p_head_NNN.ydd` (male) or `mp_f_freemode_01_p/p_head_NNN.ydd` (female)
+- glasses use `p_eyes_NNN.ydd` in the same folder
+- the three-digit number is the drawable index; each prop `.ydd` has a single entry (index 0)
+- textures `a`–`h` map to indices 0–7 and come from `p_head_diff_NNN_<letter>.ytd` in the same base folder (`p_eyes_diff_...` for glasses)
+- texture indices above 7 are **not** exported for base drawables: those variants do not exist in the base folder, and the wheel registry falls back to texture 0 for them
+- the real texture name from the selected `.ytd` is baked into the spawned prop's `diffusesampler`, so a dropped prop shows the same colours as the worn item
+
+DLC variants with the same filename are only used for drawable indices that do not exist in the base set. This prevents exporting a themed helmet in place of the base hat.
+
+## Spawning the exported models
+
+Copy each `models/whip_media_clothing_<gender>/` folder into your FiveM server's `resources/` folder and start it in `server.cfg`. The generated `fxmanifest.lua` contains `this_is_a_map 'yes'` and one `data_file 'DLC_ITYP_REQUEST' 'stream/<model>.ytyp'` line per model — do not remove them.
+
+```lua
+-- example client usage
+local model = `male_p0_np_005_00`
+RequestModel(model)
+while not HasModelLoaded(model) do Wait(0) end
+local obj = CreateObject(model, x, y, z, true, true)
+SetModelAsNoLongerNeeded(model)
+```
+
+**After adding or replacing files in `stream/`, every client must fully reconnect to the server.** A resource `refresh` + `restart` is not enough — FiveM clients keep the previously downloaded files in their cache until they reconnect. If `RequestModel` still fails after a clean reconnect and the archetype is registered, the tool falls back to the `prop_cap_01` model.
+
+## Export log
+
+Every export appends its full worker output to `<output root>/wct_export.log`. Non-fatal Blender DDS cache warnings (`failed to load data from file` / `falling back to uncompressed`) are kept in the file but hidden in the app, because all textures still render correctly.
 
 ## Collisions
 
