@@ -12,6 +12,7 @@ dist/
 src-tauri/target/
 src-tauri/gen/
 whip-clothing-tool-v*-portable-win64.zip
+whip_clothing_tool.exe
 
 # Env
 .env

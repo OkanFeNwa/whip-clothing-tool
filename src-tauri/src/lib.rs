@@ -244,17 +244,25 @@ async fn export_assets(app: AppHandle, window: Window, payload: ExportAssetsPayl
             .to_string()
     })?;
 
-    let core_script = app.path().resource_dir()
-        .ok()
-        .map(|p| p.join("core").join("blender_export.py"))
-        .filter(|p| p.exists())
+    // Look next to the running executable first. This keeps the portable
+    // build working from any folder (including the project root) without
+    // depending on compile-time paths or Tauri's bundled resource layout.
+    let script_name = "blender_export.py";
+    let core_script = std::env::current_exe().ok()
+        .and_then(|p| p.parent().map(|d| d.join("core").join(script_name)))
+        .filter(|p| p.is_file())
+        .or_else(|| {
+            app.path().resource_dir().ok()
+                .map(|p| p.join("core").join(script_name))
+                .filter(|p| p.is_file())
+        })
         .or_else(|| {
             PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                 .parent()
-                .map(|p| p.join("core").join("blender_export.py"))
-                .filter(|p| p.exists())
+                .map(|p| p.join("core").join(script_name))
+                .filter(|p| p.is_file())
         })
-        .ok_or_else(|| "blender_export.py not found".to_string())?;
+        .ok_or_else(|| format!("{} not found next to the executable", script_name))?;
 
     let job = JobPayload {
         out_root: payload.out_root.clone(),

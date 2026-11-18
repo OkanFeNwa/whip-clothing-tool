@@ -26,6 +26,18 @@ The app is portable: there is no installer and no suggested GTA V path. You choo
 
 No system Python installation is required: the real export work runs inside Blender, which already provides `szio`, PyMateria and Sollumz.
 
+## Quick start
+
+1. Extract the portable ZIP anywhere. `whip_clothing_tool.exe` is at the **root** of the extracted folder (not inside a hidden build folder), with `core/` beside it.
+2. Run `install-dependencies.ps1` once to install Blender and the Sollumz extension automatically:
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File .\install-dependencies.ps1
+   ```
+   The script is idempotent: it detects an existing Blender, installs the latest Sollumz from its official GitHub release, enables it and verifies `szio`/`pymateria` inside Blender. Add `-Dev` to also install Node.js, Rust and the Visual Studio Build Tools if you want to rebuild the app.
+3. Launch `whip_clothing_tool.exe` and choose your input/output folders in the UI.
+
+If Blender is installed somewhere unusual, point the script at it with `-BlenderPath "C:\path\to\blender.exe"` or set `WCT_BLENDER` before launching the app.
+
 ## Output layout
 
 Choose one output root. The app splits it into:
@@ -64,7 +76,7 @@ npm run tauri dev
 npm run tauri build
 ```
 
-The executable is written to `src-tauri/target/release/whip_clothing_tool.exe`. Keep `core/blender_export.py` beside it in `target/release/core/` when copying the portable build elsewhere.
+The executable is first written to `src-tauri/target/release/whip_clothing_tool.exe`; the packaging step then copies it to the project root as `whip_clothing_tool.exe`, next to `core/`. Always keep `core/blender_export.py` beside the exe when copying the portable build elsewhere.
 
 ## Repository
 

@@ -31,6 +31,16 @@ Whip Clothing Tool est une application de bureau Windows qui exporte des ressour
 ## Prérequis
 Windows 10/11 64 bits, Blender 4.2+/5.x avec Sollumz activé, GTA V Legacy uniquement pour la source Vanilla. Aucun Python système requis : le travail réel s’exécute dans Blender.
 
+## Installation automatique des dépendances
+Extrayez le ZIP : `whip_clothing_tool.exe` est à la **racine** du dossier, à côté de `core/`.
+Exécutez une fois :
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install-dependencies.ps1
+```
+
+Le script détecte Blender, installe la dernière extension Sollumz depuis la version officielle GitHub, l’active et vérifie `szio`/`pymateria` dans Blender. Avec `-Dev`, il installe aussi Node.js, Rust et les Visual Studio Build Tools pour recompiler l’application.
+
 ## Collisions
 Dépendent des `.ybn`/bounds. Si disponibles, à inclure dans la sortie ; sinon l’app avertit.
 

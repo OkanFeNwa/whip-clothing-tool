@@ -34,10 +34,12 @@ No system Python installation is required: the real work runs inside Blender, wh
 
 ### Install and run
 
-1. Download `whip-clothing-tool-v0.1.0-portable-win64.zip` and extract it anywhere.
-2. Run `whip_clothing_tool.exe`. There is no installer.
-3. If Blender is not on `PATH`, set the `WCT_BLENDER` environment variable to your `blender.exe`.
+1. Download `whip-clothing-tool-v0.1.0-portable-win64.zip` and extract it anywhere. `whip_clothing_tool.exe` is at the **root** of the extracted folder, beside `core/`.
+2. Run `install-dependencies.ps1` once to install Blender and Sollumz automatically (`powershell -ExecutionPolicy Bypass -File .\install-dependencies.ps1`). Add `-Dev` to also install Node.js, Rust and the Visual Studio Build Tools.
+3. Run `whip_clothing_tool.exe`. There is no app installer.
 4. Pick the output root and the source folders, choose the categories, then press **Export**.
+
+If Blender is not on `PATH`, set the `WCT_BLENDER` environment variable to your `blender.exe`.
 
 ### Output layout
 
@@ -87,10 +89,12 @@ Non serve Python di sistema: il lavoro reale gira dentro Blender, che fornisce g
 
 ### Installazione e avvio
 
-1. Scarica `whip-clothing-tool-v0.1.0-portable-win64.zip` ed estrailo dove vuoi.
-2. Avvia `whip_clothing_tool.exe`. Non c’è installer.
-3. Se Blender non è in `PATH`, imposta la variabile d’ambiente `WCT_BLENDER` con il percorso di `blender.exe`.
+1. Scarica `whip-clothing-tool-v0.1.0-portable-win64.zip` ed estrailo dove vuoi. `whip_clothing_tool.exe` è nella **root** della cartella estratta, accanto a `core/`.
+2. Esegui una volta `install-dependencies.ps1` per installare Blender e Sollumz automaticamente (`powershell -ExecutionPolicy Bypass -File .\install-dependencies.ps1`). Aggiungi `-Dev` per installare anche Node.js, Rust e i Visual Studio Build Tools.
+3. Avvia `whip_clothing_tool.exe`. Non c’è installer per l’app.
 4. Scegli output root e cartelle sorgente, seleziona le categorie e premi **Export**.
+
+Se Blender non è in `PATH`, imposta la variabile d’ambiente `WCT_BLENDER` con il percorso di `blender.exe`.
 
 ### Note
 
@@ -131,10 +135,12 @@ No se necesita Python del sistema: el trabajo real se ejecuta dentro de Blender,
 
 ### Instalación y uso
 
-1. Descarga `whip-clothing-tool-v0.1.0-portable-win64.zip` y extráelo donde quieras.
-2. Ejecuta `whip_clothing_tool.exe`. No hay instalador.
-3. Si Blender no está en `PATH`, define la variable de entorno `WCT_BLENDER` con la ruta a `blender.exe`.
+1. Descarga `whip-clothing-tool-v0.1.0-portable-win64.zip` y extráelo donde quieras. `whip_clothing_tool.exe` está en la **raíz** de la carpeta extraída, junto a `core/`.
+2. Ejecuta una vez `install-dependencies.ps1` para instalar Blender y Sollumz automáticamente (`powershell -ExecutionPolicy Bypass -File .\install-dependencies.ps1`). Añade `-Dev` para instalar también Node.js, Rust y Visual Studio Build Tools.
+3. Ejecuta `whip_clothing_tool.exe`. No hay instalador de la app.
 4. Elige la carpeta de salida y las fuentes, selecciona las categorías y pulsa **Export**.
+
+Si Blender no está en `PATH`, define la variable de entorno `WCT_BLENDER` con la ruta a `blender.exe`.
 
 ### Notas
 
@@ -175,10 +181,12 @@ Aucun Python système requis : le travail réel s’exécute dans Blender, qui f
 
 ### Installation et utilisation
 
-1. Téléchargez `whip-clothing-tool-v0.1.0-portable-win64.zip` et extrayez-le où vous voulez.
-2. Lancez `whip_clothing_tool.exe`. Il n’y a pas d’installateur.
-3. Si Blender n’est pas dans `PATH`, définissez la variable d’environnement `WCT_BLENDER` avec le chemin vers `blender.exe`.
+1. Téléchargez `whip-clothing-tool-v0.1.0-portable-win64.zip` et extrayez-le où vous voulez. `whip_clothing_tool.exe` est à la **racine** du dossier extrait, à côté de `core/`.
+2. Exécutez une fois `install-dependencies.ps1` pour installer Blender et Sollumz automatiquement (`powershell -ExecutionPolicy Bypass -File .\install-dependencies.ps1`). Ajoutez `-Dev` pour installer aussi Node.js, Rust et les Visual Studio Build Tools.
+3. Lancez `whip_clothing_tool.exe`. Il n’y a pas d’installateur pour l’application.
 4. Choisissez le dossier de sortie et les sources, sélectionnez les catégories, puis cliquez sur **Export**.
+
+Si Blender n’est pas dans `PATH`, définissez la variable d’environnement `WCT_BLENDER` avec le chemin vers `blender.exe`.
 
 ### Remarques
 
@@ -219,10 +227,12 @@ Es ist kein System-Python nötig: die eigentliche Arbeit läuft in Blender, das 
 
 ### Installation und Start
 
-1. Lade `whip-clothing-tool-v0.1.0-portable-win64.zip` herunter und entpacke es beliebig.
-2. Starte `whip_clothing_tool.exe`. Es gibt keinen Installer.
-3. Falls Blender nicht in `PATH` liegt, setze die Umgebungsvariable `WCT_BLENDER` auf den Pfad von `blender.exe`.
+1. Lade `whip-clothing-tool-v0.1.0-portable-win64.zip` herunter und entpacke es beliebig. `whip_clothing_tool.exe` liegt im **Stammverzeichnis** des entpackten Ordners, neben `core/`.
+2. Führe einmal `install-dependencies.ps1` aus, um Blender und Sollumz automatisch zu installieren (`powershell -ExecutionPolicy Bypass -File .\install-dependencies.ps1`). Mit `-Dev` werden zusätzlich Node.js, Rust und die Visual Studio Build Tools installiert.
+3. Starte `whip_clothing_tool.exe`. Es gibt keinen Installer für die App.
 4. Wähle Ausgabeordner und Quellen, markiere die Kategorien und klicke auf **Export**.
+
+Falls Blender nicht in `PATH` liegt, setze die Umgebungsvariable `WCT_BLENDER` auf den Pfad von `blender.exe`.
 
 ### Hinweise
 
