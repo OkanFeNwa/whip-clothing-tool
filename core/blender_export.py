@@ -205,6 +205,85 @@ def fix_alpha_modes() -> None:
                 pass
 
 
+def extract_ytd_dds(ytd_path: Path, out_dir: Path) -> list[Path]:
+    """Unpack the DDS textures of a .ytd so Blender can actually use them.
+
+    Sollumz imports the dictionary but leaves clothing materials pointing at
+    unresolved placeholders such as "zedra2.dds". Those placeholders are the
+    reason every texture variant rendered with the same fallback colour.
+    """
+    if not ytd_path.is_file():
+        return []
+    try:
+        from szio import try_load_asset
+        asset, _ = try_load_asset(str(ytd_path), return_target=True)
+    except Exception as exc:
+        log("error", f"Cannot read texture file {ytd_path.name}: {exc}")
+        return []
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    files: list[Path] = []
+    for name, tex in (getattr(asset, "textures", {}) or {}).items():
+        try:
+            source = getattr(tex, "data", None)
+            data = source.read_bytes() if hasattr(source, "read_bytes") else getattr(source, "data", b"")
+            if not data or not data.startswith(b"DDS "):
+                continue
+            target = out_dir / f"{name}.dds"
+            target.write_bytes(data)
+            files.append(target)
+        except Exception as exc:
+            log("error", f"Cannot unpack texture {name}: {exc}")
+    return files
+
+
+def apply_diffuse_textures(dds_files: list[Path]) -> int:
+    """Bind unpacked DDS files to the diffuse nodes Sollumz left unresolved."""
+    if not dds_files:
+        return 0
+
+    loaded: dict[str, object] = {}
+    for path in dds_files:
+        try:
+            # check_existing=False is critical: GTA variants often reuse the same
+            # texture name with different pixels. Reusing a cached image would
+            # make every preview look identical again.
+            loaded[path.stem.lower()] = bpy.data.images.load(str(path), check_existing=False)
+        except Exception as exc:
+            log("error", f"Cannot load texture {path.name}: {exc}")
+    if not loaded:
+        return 0
+
+    fallback = next(
+        (img for name, img in loaded.items() if "diff" in name),
+        next(iter(loaded.values())),
+    )
+
+    fixed = 0
+    for mat in bpy.data.materials:
+        if not mat.node_tree:
+            continue
+        for node in mat.node_tree.nodes:
+            if node.type != "TEX_IMAGE":
+                continue
+            node_name = node.name.lower()
+            if node_name != "diffusesampler" and not node_name.startswith("diffuse"):
+                continue
+            img = node.image
+            if img is not None and img.has_data:
+                continue
+            key = img.name.lower() if img else ""
+            while "." in key and key.rsplit(".", 1)[-1].isdigit():
+                key = key.rsplit(".", 1)[0]
+            if key.endswith(".dds"):
+                key = key[:-4]
+            node.image = loaded.get(key, fallback)
+            fixed += 1
+    if fixed:
+        log("info", f"Applied {fixed} diffuse texture(s) to imported materials")
+    return fixed
+
+
 def mesh_bounds():
     meshes = [o for o in bpy.data.objects if o.type == "MESH" and not is_collision(o)]
     if not meshes:
@@ -266,8 +345,12 @@ def frame_camera(cam) -> None:
 def render_preview(work_dir: Path, model_name: str, output: Path, job: dict, source_name: str) -> bool:
     clear_scene()
     ensure_sollumz()
+
+    ytd_path = work_dir / f"{model_name}.ytd"
+    dds_files = extract_ytd_dds(ytd_path, work_dir / f"{model_name}_textures")
+
     files = [{"name": f"{model_name}.ydr"}]
-    if (work_dir / f"{model_name}.ytd").is_file():
+    if ytd_path.is_file():
         files.append({"name": f"{model_name}.ytd"})
 
     bpy.ops.sollumz.import_assets(
@@ -278,6 +361,7 @@ def render_preview(work_dir: Path, model_name: str, output: Path, job: dict, sou
     if mesh_bounds() is None:
         return False
 
+    apply_diffuse_textures(dds_files)
     fix_alpha_modes()
     hide_collisions()
     apply_orientation(source_name)
