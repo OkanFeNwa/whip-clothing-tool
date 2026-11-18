@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { open } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
@@ -105,6 +105,8 @@ export default function App() {
   const [prep, setPrep] = useState<{ current: number; total: number; message: string }>({ current: 0, total: 0, message: "" });
   const [core, setCore] = useState<{ current: number; total: number; message: string }>({ current: 0, total: 0, message: "" });
   const [logs, setLogs] = useState<{ level: LogLevel; message: string }[]>([]);
+  const [finished, setFinished] = useState<{ ok: boolean; message: string } | null>(null);
+  const logRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
@@ -119,11 +121,18 @@ export default function App() {
       } else if (p.kind === "log") {
         setLogs((prev) => [...prev, { level: p.level, message: p.message }]);
       } else if (p.kind === "finished") {
+        setFinished({ ok: p.ok, message: p.message });
         setLogs((prev) => [...prev, { level: p.ok ? "success" : "error", message: p.message }]);
       }
     }).then((fn) => { unlisten = fn; });
     return () => { unlisten?.(); };
   }, []);
+
+  // Keep the newest log line visible while the worker is running.
+  useEffect(() => {
+    const box = logRef.current;
+    if (box) box.scrollTop = box.scrollHeight;
+  }, [logs]);
 
   // Persist every user choice so the next launch reopens with the same setup.
   useEffect(() => {
@@ -187,6 +196,7 @@ export default function App() {
     if (cats.length === 0) { setLogs((p) => [...p, { level: "error", message: t("status.pickCategories") }]); return; }
     setBusy(true);
     setLogs([]);
+    setFinished(null);
     setPrep({ current: 0, total: 0, message: "" });
     setCore({ current: 0, total: 0, message: "" });
     try {
@@ -205,7 +215,13 @@ export default function App() {
       });
       setLogs((p) => [...p, { level: "success", message: res }]);
     } catch (e) {
-      setLogs((p) => [...p, { level: "error", message: String(e) }]);
+      const message = String(e);
+      setFinished({ ok: false, message });
+      // Rust already emitted the same message as a "finished" event: avoid
+      // printing it twice when the command also rejects.
+      setLogs((p) => p.length && p[p.length - 1].message === message
+        ? p
+        : [...p, { level: "error", message }]);
     } finally { setBusy(false); }
   }
 
@@ -328,8 +344,16 @@ export default function App() {
         </div>
 
         <div className="field">
-          <div className="log-head"><h3>{t("log.title")}</h3><button type="button" className="btn btn-mini" onClick={() => setLogs([])}>{t("log.clear")}</button></div>
-          <div className="log-box">
+          <div className="log-head">
+            <h3>{t("log.title")}</h3>
+            {finished && (
+              <div className={`badge compact ${finished.ok ? "ok" : "bad"}`} title={finished.message}>
+                {finished.ok ? "✓ " : "✕ "}{finished.ok ? t("export.doneShort") : t("progress.failed")}
+              </div>
+            )}
+            <button type="button" className="btn btn-mini" onClick={() => setLogs([])}>{t("log.clear")}</button>
+          </div>
+          <div className="log-box" ref={logRef}>
             {logs.length === 0 ? <div className="hint">{t("log.empty")}</div> : logs.map((l, i) => (
               <div key={i} className={`log-line ${l.level}`}><span className="log-tag">{t(`log.${l.level}`)}</span>{l.message}</div>
             ))}

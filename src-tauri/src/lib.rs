@@ -51,9 +51,13 @@ pub enum ProgressEvent {
 #[derive(Debug, Deserialize)]
 #[serde(tag = "kind")]
 pub enum CoreEvent {
-    #[serde(alias = "progress")]
+    // The Blender worker emits lowercase "kind" values. Renaming (not aliasing)
+    // is required for internally-tagged enums to match them.
+    #[serde(rename = "progress")]
     Progress { message: String, current: u32, total: u32 },
+    #[serde(rename = "log")]
     Log { level: String, message: String },
+    #[serde(rename = "done")]
     Done { ok: bool, message: String },
 }
 
@@ -91,6 +95,24 @@ fn count_clothing_recursive(path: &PathBuf) -> (usize, usize) {
     let mut ytd = 0usize;
     walk(path, &mut ydd, &mut ytd);
     (ydd, ytd)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::CoreEvent;
+
+    #[test]
+    fn parses_worker_events_lowercase() {
+        let log: CoreEvent = serde_json::from_str(
+            r#"{"kind":"log","level":"info","message":"hello"}"#,
+        ).expect("log event");
+        assert!(matches!(log, CoreEvent::Log { .. }));
+
+        let done: CoreEvent = serde_json::from_str(
+            r#"{"kind":"done","ok":true,"message":"ok"}"#,
+        ).expect("done event");
+        assert!(matches!(done, CoreEvent::Done { ok: true, .. }));
+    }
 }
 
 #[tauri::command]
