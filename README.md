@@ -1,13 +1,14 @@
 # Whip Clothing Tool
 
-Whip Clothing Tool is a Windows desktop app to export **GTA V clothing** assets for **FiveM (WHIP)** workflows:
+Whip Clothing Tool is a Windows **portable** desktop app to export GTA V clothing assets for **FiveM (WHIP)** workflows:
 
-- Generate **preview images** (same camera angle and lighting for consistency) with **transparent background**, in selectable **format** and **size**.
-- Export **prop models** for dropping/throwing clothing items in-game: produces **`.ydr` + `.ytd`** (and optional collision files where applicable) into an **output folder you choose**.
-- Supports **vanilla** assets (from GTA V Legacy RPFs), **addon packs** (folders containing clothing `.ydd`/`.ytd`), or **both**.
+- Generate **preview images** with a fixed angle and lighting, transparent background, and selectable size/format.
+- Export **model files** as **`.ydr` + `.ytd`** (plus collision files when the source actually contains them).
+- Support **vanilla** assets (GTA V Legacy RPFs), **addon packs** (loose `.ydd`/`.ytd` folders, scanned recursively), or **both**.
+- Export every drawable/texture variant automatically, with output names generated from the source clothing name.
 - Multi-language UI: **English, Italian, Spanish, French, German**.
 
-> This tool is designed to be **installed** (installer-based). It does **not** assume any hardcoded WHIP server paths: you always pick input/output folders in the UI.
+The app is portable: there is no installer and no suggested GTA V path. You choose every input and the output root in the UI.
 
 ## Documentation (other languages)
 
@@ -16,91 +17,55 @@ Whip Clothing Tool is a Windows desktop app to export **GTA V clothing** assets 
 - Français: [docs/i18n/README.fr.md](docs/i18n/README.fr.md)
 - Deutsch: [docs/i18n/README.de.md](docs/i18n/README.de.md)
 
-## What this tool does
+## Runtime requirements
 
-### 1) Preview images (shop / clothing previews)
-- Exports preview renders of clothing items with a **fixed angle and fixed lighting** (consistency-first).
-- Background is **transparent**.
-- You choose:
-  - **Source mode**: `Vanilla only`, `Addon packs only`, or `Both`
-  - **Output folder** (browse)
-  - **Image size** (manual input, e.g. `256`, `512`, ...)
-  - **Image format** (selector), typically `PNG` and/or `WebP` (and `JPEG` only if transparency is not required)
-- For addon packs, the tool can read pack folders you select and infer output naming compatible with WHIP naming conventions where possible.
+- Windows 10/11 (64-bit)
+- **Blender 4.2+/5.x** with the **Sollumz** add-on enabled
+  - The app finds Blender on `PATH`, under the standard `Program Files/Blender Foundation` locations, or via the `WCT_BLENDER` environment variable pointing to `blender.exe`.
+- GTA V Legacy installation only if you use the *Vanilla* or *Both* source mode
 
-### 2) Prop models (for dropped/thrown clothing)
-- Exports model files suitable for FiveM streaming: primarily **`.ydr` + `.ytd`** into a folder you choose.
-- Optional: export **collision** data if the pipeline supports it for the selected asset type (see [Collisions](#collisions)).
-- You choose output folders and paths manually (no hardcoded server directories).
+No system Python installation is required: the real export work runs inside Blender, which already provides `szio`, PyMateria and Sollumz.
 
-## Key principles (important)
+## Output layout
 
-- **No hardcoded paths.** Every input/output location is selected in the app (file browser).
-- **Installer distribution.** The project is meant to be built into an installer (MSI/NSIS) via Tauri bundling.
-- **Include dependencies in the installer when feasible.** If the app needs external runtimes/tools, the installer/build pipeline should bundle or auto-install them (see [Prerequisites and bundled components](#prerequisites-and-bundled-components)).
-- **Fast and lightweight app code.** Heavy work is delegated to external tools (Python, Blender) invoked as needed.
+Choose one output root. The app splits it into:
 
-## Requirements (runtime)
-
-Depending on the tasks you run, the app may require some components. The installer should include or guide installation of missing pieces:
-
-- **Windows 10/11 (64-bit)**
-- **GTA V Legacy** installation (required for vanilla RPF extraction)
-- **Python 3.10+** (recommended) with packages used by the included core scripts (installed automatically by the installer/setup step when possible)
-- **Blender 4.2+ / 5.x** (recommended) with **Sollumz** (required for certain render/export pipelines)
-- Optional: GPU drivers up to date (for Blender rendering)
-
-> If a required component is missing, the app should show a clear message and, when possible, offer to install/configure it.
+```text
+<output root>/
+  models/whip_media_clothing_<male|female>/img/clothing/<gender>/<slot>/
+  previews/whip_media_clothing_<male|female>/img/clothing/<gender>/<slot>/
+  export_manifest.json
+```
 
 ## Collisions
 
-FiveM object collisions depend on how the model is set up (often a `.ybn`/collision bounds). Whip’s behavior for throwable/dropped objects should be followed:
+If a source drawable contains collision bounds and **Export collisions** is enabled, the worker writes matching `.ybn` files next to the `.ydr`/`.ytd` pair. If the source has no bounds, no collision file is invented.
 
-- If your pipeline can generate or attach valid collisions, enable export/copy of collision files into the output folder.
-- If collisions are not available for a given asset, the tool should warn you (the item may behave incorrectly in-game).
+## Project structure
 
-The exact collision export path depends on the selected export method (RPF extraction vs Blender/Sollumz workflow). The UI will expose options when supported.
-
-## Project structure (high level)
-
-```
+```text
 whip-clothing-tool/
-  src-tauri/        # Tauri (Rust) desktop shell + commands
-  src/              # Web UI (i18n, settings, job runners)
-  core/             # Python/core scripts (model extraction, helpers)
-  scripts/          # Build helpers, bundling notes
+  src-tauri/        # Tauri (Rust) shell, folder validation, Blender process launcher
+  src/              # React UI with EN/IT/ES/FR/DE translations
+  core/             # Blender export worker + optional standalone helpers
   docs/i18n/        # Translated documentation
-  assets/           # Icons, templates
 ```
 
 ## Development
-
-### Prerequisites (build machine)
-
-- Node.js (LTS) + npm
-- Rust (stable) + Cargo
-- Python 3.10+
-- (Optional) Blender + Sollumz for preview rendering pipelines
-
-### Run in dev (once scaffold is complete)
 
 ```bash
 npm install
 npm run tauri dev
 ```
 
-### Build installer (Windows)
+## Build (portable Windows exe)
 
 ```bash
 npm run tauri build
 ```
 
-The output installer will be produced by Tauri’s bundler (e.g. NSIS/MSI depending on configuration).
+The executable is written to `src-tauri/target/release/whip_clothing_tool.exe`. Keep `core/blender_export.py` beside it in `target/release/core/` when copying the portable build elsewhere.
 
 ## Repository
 
-This repository is intended to be published as a **private GitHub repository** (you can make it public later). Keep secrets out of git; use local config files ignored by `.gitignore`.
-
-## License
-
-TBD (add a `LICENSE` file before public release).
+Private repository intended for internal release.

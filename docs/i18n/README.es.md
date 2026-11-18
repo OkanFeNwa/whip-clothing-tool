@@ -7,7 +7,7 @@ Whip Clothing Tool es una aplicación de escritorio para Windows que exporta rec
 - Soporta **solo vanilla**, **solo packs addon** o **ambos**.
 - Interfaz en varios idiomas: **Inglés, Italiano, Español, Francés, Alemán**.
 
-> App pensada para **instalarse** (instalador). Sin rutas fijas de WHIP: siempre eliges entrada/salida en la app.
+> La app es **portátil**: sin instalador y sin ruta de GTA/WHIP sugerida. Siempre eliges entrada/salida en la app.
 
 ## Documentación
 
@@ -29,7 +29,7 @@ Whip Clothing Tool es una aplicación de escritorio para Windows que exporta rec
 - Sin rutas codificadas: siempre con el explorador de archivos.
 
 ## Requisitos
-Windows 10/11 64-bit, GTA V Legacy para vanilla, Python 3.10+ y (según pipeline) Blender + Sollumz. El instalador debe incluir o guiar la instalación.
+Windows 10/11 64-bit, Blender 4.2+/5.x con Sollumz habilitado, GTA V Legacy solo para la fuente Vanilla. No se necesita Python del sistema: el trabajo real se ejecuta dentro de Blender.
 
 ## Colisiones
 Dependen de `.ybn`/bounds. Si están disponibles, inclúyelas en la salida; si no, la app lo avisará.

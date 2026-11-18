@@ -1,20 +1,26 @@
 # Core scripts
 
-## `forge.py`
+## `blender_export.py`
 
-Extracts GTA V clothing drawables from RPF archives (via `szio`/`PyMateria`) into FiveM-streamable `.ydr` + `.ytd` pairs.
-
-This script is copied from the Whip workspace toolchain (`whip_clothingwheel/tools/model_forge/forge.py`) for packaging into the Whip Clothing Tool project.
-
-### Usage (standalone)
+The real export worker used by the desktop app. It runs inside Blender:
 
 ```powershell
-python forge.py --reindex --game "G:\Games\Epic Games\GTAV"
-python forge.py --list --slot hat --game "G:\Games\Epic Games\GTAV"
-python forge.py --slot hat --drawable 0 --texture 0 --out "C:\path\to\output"
+blender --background --python blender_export.py -- job.json
 ```
 
-### Notes
+It scans loose add-on folders and/or vanilla RPF archives, converts every drawable/texture variant into WHIP-compatible `.ydr` + `.ytd` files, optionally writes `.ybn` collisions, renders transparent previews with fixed lighting/camera, and emits NDJSON progress events on stdout.
 
-- Requires Python 3.10+ and dependencies such as `szio` and `pymateria` (index from Cfx wheel repo) as used by the original tool.
-- The desktop app will call this script with user-selected paths (no hardcoded directories).
+Blender provides the required modules (`szio`, PyMateria, Sollumz). No system Python packages are needed.
+
+## `forge.py`
+
+Original standalone RPF extraction helper kept for debugging. It has no built-in game path: pass `--game` or set `WCT_GTAV_PATH`.
+
+```powershell
+python forge.py --reindex --game "<your GTA V Legacy folder>"
+python forge.py --list --slot hat --game "<your GTA V Legacy folder>"
+```
+
+## `export_core.py`
+
+Optional dependency-free CLI bridge that finds Blender and runs `blender_export.py`. The Tauri app calls Blender directly and does not need this script at runtime.

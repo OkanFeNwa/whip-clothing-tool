@@ -17,41 +17,97 @@
     "gtavLegacyHint": "Richiesta per l’estrazione vanilla (cartella con GTA5.exe e update/x64).",
     "addonFolders": "Cartelle pack addon",
     "addonFoldersHint": "Una o più cartelle con file .ydd/.ytd (es. resources/[clothing]/...).",
-    "outputPreviews": "Cartella di output (anteprime)",
-    "outputModels": "Cartella di output (modelli)",
+    "outputRoot": "Cartella radice di output",
+    "outputRootHint": "Una sola cartella per tutto. Il tool crea in automatico: models/ e previews/.",
     "browse": "Sfoglia…",
     "addFolder": "Aggiungi cartella",
     "remove": "Rimuovi"
   },
+  "export": {
+    "title": "Esportazione",
+    "mode": "Cosa esportare",
+    "models": "Modelli",
+    "previews": "Anteprime",
+    "both": "Entrambi",
+    "run": "Esporta",
+    "running": "Esportazione…",
+    "doneShort": "Esportazione completata."
+  },
   "previews": {
-    "title": "Anteprime (immagini negozio)",
+    "title": "Immagini anteprima",
     "size": "Dimensione immagine (px)",
-    "sizeHint": "Output quadrato, es. 256 o 512.",
+    "sizeHint": "Output quadrato, es. 256 o 512. Stessa angolazione e luce per tutti i capi.",
     "format": "Formato immagine",
-    "transparentNote": "Sfondo sempre trasparente quando il formato lo supporta (PNG/WebP).",
-    "run": "Genera anteprime (presto)"
+    "transparentNote": "Sfondo trasparente se il formato lo supporta (PNG/WebP). JPEG non supporta la trasparenza.",
+    "note": "Tutte le varianti drawable e texture vengono esportate in automatico."
   },
   "models": {
-    "title": "Modelli prop (caduta / lancio)",
-    "note": "Esporta .ydr + .ytd nella cartella scelta. L’export collisioni viene mostrato se supportato.",
-    "run": "Esporta modelli (usa core/forge.py)",
-    "slot": "Slot (forge.py)",
-    "drawable": "Indice drawable",
-    "texture": "Indice texture",
-    "modelName": "Nome modello output (opzionale)"
+    "title": "Modelli prop",
+    "note": "Esporta tutte le varianti drawable e texture come .ydr + .ytd. I nomi modello vengono generati in automatico dal nome del file capo sorgente.",
+    "run": "Esporta modelli"
+  },
+  "categories": {
+    "modelsLabel": "Categorie — modelli",
+    "previewsLabel": "Categorie — anteprime",
+    "hint": "Seleziona una o più categorie. Ogni categoria va in una cartella dedicata (con sottocartelle male/female).",
+    "all": "Seleziona tutte",
+    "none": "Pulisci",
+    "items": {
+      "head": "Testa (cappelli/elmetti)",
+      "berd": "Maschere/barbe (berd)",
+      "hair": "Capelli",
+      "uppr": "Parte alta (uppr)",
+      "lowr": "Parte bassa (lowr)",
+      "hand": "Mani/borse (hand)",
+      "feet": "Piedi",
+      "teef": "Denti (teef)",
+      "accs": "Accessori (accs)",
+      "task": "Armatura (task)",
+      "decl": "Decal (decl)",
+      "jbib": "Top/giacche (jbib)",
+      "props_p_head": "Prop: cappelli (p_head)",
+      "props_p_eyes": "Prop: occhiali (p_eyes)",
+      "props_p_ears": "Prop: orecchie (p_ears)",
+      "props_p_rwrist": "Prop: polso destro",
+      "props_p_lwrist": "Prop: polso sinistro"
+    }
   },
   "collisions": {
     "label": "Esporta collisioni se disponibili",
-    "hint": "Se il flusso fornisce .ybn/collisioni, includile nell’output. Se non disponibili, l’oggetto potrebbe comportarsi male in gioco."
+    "hint": "I file .ybn/collisione vengono inclusi se forniti dalla pipeline sorgente."
   },
   "status": {
     "ready": "Pronto.",
-    "missingPython": "Python non rilevato. Installa Python 3.10+ oppure usa il bundle dell’installer.",
     "missingGtav": "Seleziona la cartella GTA V Legacy per sorgenti vanilla.",
-    "pickOutput": "Seleziona prima una cartella di output."
+    "pickOutput": "Seleziona prima una cartella radice di output.",
+    "pickCategories": "Seleziona almeno una categoria."
   },
   "footer": {
-    "docs": "Documentazione",
-    "repoNote": "Consigliato repo GitHub privato. Non committare percorsi locali o segreti."
+    "docs": "Documentazione"
+  },
+  "validation": {
+    "gtavOk": "Installazione GTA V valida",
+    "gtavBad": "Cartella non valida: GTA5.exe e update/x64 non trovati",
+    "addonFound": "{count} file vestiti trovati ({ydd} .ydd, {ytd} .ytd)",
+    "addonEmpty": "Nessun file vestito .ydd/.ytd trovato",
+    "addonBad": "Cartella non valida o non leggibile",
+    "scanning": "Scansione sottocartelle…"
+  },
+  "progress": {
+    "idle": "In attesa.",
+    "starting": "Avvio…",
+    "models": "Esportazione modelli…",
+    "previews": "Rendering anteprime…",
+    "done": "Fatto.",
+    "failed": "Errore.",
+    "core": "Elaborazione file"
+  },
+  "log": {
+    "title": "Log",
+    "clear": "Pulisci",
+    "empty": "Nessun messaggio.",
+    "success": "Successo",
+    "error": "Errore",
+    "info": "Info"
   }
 }

@@ -5,36 +5,46 @@
 - **Node.js** (LTS) + npm
 - **Rust** (stable) + Cargo (required for Tauri). Install from https://rustup.rs and ensure `cargo` is on PATH.
 - **Visual Studio Build Tools** (C++ workload) if required by Tauri on Windows.
-- **Python 3.10+** (for `core/forge.py`). The installer should bundle Python or guide the user to install it.
+
+Blender + Sollumz are required at **runtime**, not at build time.
 
 ## Install JS dependencies
 
 ```powershell
-cd E:\whip\tools\whip-clothing-tool
 npm install
 ```
 
 ## Run in development
 
 ```powershell
-npm run tauri:dev
+npm run tauri dev
 ```
 
-## Build installer
+## Build portable exe
 
 ```powershell
-npm run tauri:build
+npm run tauri build
 ```
 
-Tauri outputs installers under `src-tauri/target/release/bundle/` (NSIS/MSI depending on configuration).
+Tauri is configured with `bundle.active = false`, so the output is a standalone executable:
 
-## Bundling notes (important)
+```text
+src-tauri/target/release/whip_clothing_tool.exe
+src-tauri/target/release/core/blender_export.py
+```
 
-- **No hardcoded paths**: users select GTA V Legacy, addon folders, and output folders in the app.
-- **Ship `core/forge.py`** with the app resources if you call it from the bundled app (configure Tauri `resources` in `tauri.conf.json` when wiring the final pipeline).
-- **Python runtime**: prefer an installer that either (a) bundles an embeddable Python + dependencies, or (b) runs a first-run setup that installs requirements. Document this in the final installer UX.
-- **Blender/Sollumz**: optional for some workflows; the app should detect presence and show instructions/download links. Do not assume paths.
+Copy the `core/` folder next to the exe when distributing the portable build.
 
-## Icon placeholders
+## Runtime discovery
 
-Replace files in `src-tauri/icons/` with real app icons before release.
+The app looks for Blender in this order:
+
+1. `WCT_BLENDER` / `BLENDER_EXE` environment variable
+2. `blender.exe` on `PATH`
+3. Standard Blender Foundation folders under `Program Files`, `Program Files (x86)` and `LOCALAPPDATA`
+
+No game path, server path or user path is baked into the app.
+
+## No hardcoded paths
+
+Users select the GTA V Legacy folder, add-on folders and output root in the UI. Do not add machine-specific defaults to the source or documentation.

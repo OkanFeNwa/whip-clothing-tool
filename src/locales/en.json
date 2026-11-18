@@ -16,42 +16,98 @@
     "gtavLegacy": "GTA V Legacy folder",
     "gtavLegacyHint": "Required for vanilla extraction (folder containing GTA5.exe and update/x64).",
     "addonFolders": "Addon pack folders",
-    "addonFoldersHint": "One or more folders that contain clothing .ydd/.ytd files (e.g. resources/[clothing]/...).",
-    "outputPreviews": "Output folder (previews)",
-    "outputModels": "Output folder (models)",
+    "addonFoldersHint": "One or more folders containing .ydd/.ytd files (e.g. resources/[clothing]/...).",
+    "outputRoot": "Output root folder",
+    "outputRootHint": "One folder for everything. The tool creates subfolders automatically: models/ and previews/.",
     "browse": "Browse…",
     "addFolder": "Add folder",
     "remove": "Remove"
   },
+  "export": {
+    "title": "Export",
+    "mode": "What to export",
+    "models": "Models",
+    "previews": "Previews",
+    "both": "Both",
+    "run": "Export",
+    "running": "Exporting…",
+    "doneShort": "Export completed."
+  },
   "previews": {
-    "title": "Previews (shop images)",
+    "title": "Preview images",
     "size": "Image size (px)",
-    "sizeHint": "Square output, e.g. 256 or 512.",
+    "sizeHint": "Square output, e.g. 256 or 512. Same fixed angle and lighting for all items.",
     "format": "Image format",
-    "transparentNote": "Background is always transparent when the format supports it (PNG/WebP).",
-    "run": "Generate previews (coming soon)"
+    "transparentNote": "Transparent background when the format supports it (PNG/WebP). JPEG does not support transparency.",
+    "note": "All drawable and texture variants are exported automatically."
   },
   "models": {
-    "title": "Prop models (drop / throw)",
-    "note": "Exports .ydr + .ytd to the chosen folder. Collision export is shown if supported by the pipeline.",
-    "run": "Export models (uses core/forge.py)",
-    "slot": "Slot (forge.py)",
-    "drawable": "Drawable index",
-    "texture": "Texture index",
-    "modelName": "Output model name (optional)"
+    "title": "Prop models",
+    "note": "Exports all drawable and texture variants as .ydr + .ytd. Model names are generated automatically from the source clothing file name.",
+    "run": "Export models"
+  },
+  "categories": {
+    "modelsLabel": "Categories — models",
+    "previewsLabel": "Categories — previews",
+    "hint": "Select one or more. Each category goes into its own folder (male/female subfolders included).",
+    "all": "Select all",
+    "none": "Clear",
+    "items": {
+      "head": "Head (hats/helmets)",
+      "berd": "Masks / beards (berd)",
+      "hair": "Hair",
+      "uppr": "Upper body (uppr)",
+      "lowr": "Lower body (lowr)",
+      "hand": "Hands / bags (hand)",
+      "feet": "Feet",
+      "teef": "Teeth (teef)",
+      "accs": "Accessories (accs)",
+      "task": "Armor (task)",
+      "decl": "Decals (decl)",
+      "jbib": "Tops / jackets (jbib)",
+      "props_p_head": "Props: hats (p_head)",
+      "props_p_eyes": "Props: glasses (p_eyes)",
+      "props_p_ears": "Props: ears (p_ears)",
+      "props_p_rwrist": "Props: right wrist",
+      "props_p_lwrist": "Props: left wrist"
+    }
   },
   "collisions": {
     "label": "Export collisions when available",
-    "hint": "If your workflow provides .ybn/collision data, include it in the output folder. If not available, items may behave incorrectly in-game."
+    "hint": ".ybn/collision files are included if the source pipeline provides them."
   },
   "status": {
     "ready": "Ready.",
-    "missingPython": "Python not detected. Install Python 3.10+ or use the installer bundle.",
     "missingGtav": "Select your GTA V Legacy folder for vanilla sources.",
-    "pickOutput": "Select an output folder first."
+    "pickOutput": "Select an output root folder first.",
+    "pickCategories": "Select at least one category."
   },
   "footer": {
-    "docs": "Documentation",
-    "repoNote": "Private GitHub repo recommended. Do not commit local paths or secrets."
+    "docs": "Documentation"
+  },
+  "validation": {
+    "gtavOk": "Valid GTA V installation",
+    "gtavBad": "Invalid folder: GTA5.exe and update/x64 not found",
+    "addonFound": "{count} clothing files found ({ydd} .ydd, {ytd} .ytd)",
+    "addonEmpty": "No .ydd/.ytd clothing files found",
+    "addonBad": "Invalid or unreadable folder",
+    "scanning": "Scanning subfolders…"
+  },
+  "progress": {
+    "idle": "Idle.",
+    "starting": "Starting…",
+    "models": "Exporting models…",
+    "previews": "Rendering previews…",
+    "done": "Done.",
+    "failed": "Failed.",
+    "core": "Processing files"
+  },
+  "log": {
+    "title": "Log",
+    "clear": "Clear",
+    "empty": "No messages yet.",
+    "success": "Success",
+    "error": "Error",
+    "info": "Info"
   }
 }

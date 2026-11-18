@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 import time
@@ -38,7 +39,8 @@ from pathlib import Path
 from szio import VPath, save_asset, try_load_asset
 from szio.gta5.assets import AssetFormat, AssetTarget, AssetVersion, SaveOptions
 
-DEFAULT_GAME = r"G:\Games\Epic Games\GTAV"
+# No bundled game path: set WCT_GTAV_PATH or pass --game / --reindex explicitly.
+DEFAULT_GAME = os.environ.get("WCT_GTAV_PATH", "")
 HERE = Path(__file__).resolve().parent
 INDEX_PATH = HERE / "rpf_index.json"
 
@@ -306,6 +308,10 @@ def main() -> int:
     ap.add_argument("--reindex", action="store_true", help="rebuild the RPF file index")
     ap.add_argument("--list", action="store_true", help="list available drawables for --slot/--prefix")
     args = ap.parse_args()
+
+    if not args.game:
+        print("[error] pass --game or set WCT_GTAV_PATH to your GTA V Legacy folder", file=sys.stderr)
+        return 2
 
     game = Path(args.game)
     if not (game / "GTA5.exe").exists():

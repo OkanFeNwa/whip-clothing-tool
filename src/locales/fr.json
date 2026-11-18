@@ -1,36 +1,113 @@
 {
-  "app": { "title": "Whip Clothing Tool", "subtitle": "Exportez des aperçus vêtements GTA V et des modèles prop pour FiveM (WHIP)." },
-  "language": { "label": "Langue" },
-  "source": { "label": "Source", "vanilla": "Vanilla uniquement", "addon": "Packs addon uniquement", "both": "Les deux" },
+  "app": {
+    "title": "Whip Clothing Tool",
+    "subtitle": "Exportez des aperçus vêtements GTA V et des modèles prop pour FiveM (WHIP)."
+  },
+  "language": {
+    "label": "Langue"
+  },
+  "source": {
+    "label": "Source",
+    "vanilla": "Vanilla uniquement",
+    "addon": "Packs addon uniquement",
+    "both": "Les deux"
+  },
   "paths": {
     "gtavLegacy": "Dossier GTA V Legacy",
     "gtavLegacyHint": "Requis pour l’extraction vanilla (dossier avec GTA5.exe et update/x64).",
     "addonFolders": "Dossiers packs addon",
     "addonFoldersHint": "Un ou plusieurs dossiers avec .ydd/.ytd (ex. resources/[clothing]/...).",
-    "outputPreviews": "Dossier de sortie (aperçus)",
-    "outputModels": "Dossier de sortie (modèles)",
+    "outputRoot": "Dossier racine de sortie",
+    "outputRootHint": "Un seul dossier pour tout. L’outil crée automatiquement models/ et previews/.",
     "browse": "Parcourir…",
     "addFolder": "Ajouter un dossier",
     "remove": "Retirer"
   },
+  "export": {
+    "title": "Exporter",
+    "mode": "Quoi exporter",
+    "models": "Modèles",
+    "previews": "Aperçus",
+    "both": "Les deux",
+    "run": "Exporter",
+    "running": "Export…",
+    "doneShort": "Export terminé."
+  },
   "previews": {
-    "title": "Aperçus (boutique)",
+    "title": "Images d’aperçu",
     "size": "Taille image (px)",
-    "sizeHint": "Carré, ex. 256 ou 512.",
+    "sizeHint": "Carré, ex. 256 ou 512. Même angle et éclairage pour tous.",
     "format": "Format image",
-    "transparentNote": "Fond transparent si le format le permet (PNG/WebP).",
-    "run": "Générer les aperçus (bientôt)"
+    "transparentNote": "Fond transparent si le format le permet (PNG/WebP). JPEG ne gère pas la transparence.",
+    "note": "Toutes les variantes drawable et texture sont exportées automatiquement."
   },
   "models": {
-    "title": "Modèles prop (chute / lancer)",
-    "note": "Exporte .ydr + .ytd dans le dossier choisi.",
-    "run": "Exporter les modèles (utilise core/forge.py)",
-    "slot": "Slot (forge.py)",
-    "drawable": "Index drawable",
-    "texture": "Index texture",
-    "modelName": "Nom modèle sortie (optionnel)"
+    "title": "Modèles prop",
+    "note": "Exporte toutes les variantes drawable et texture en .ydr + .ytd. Les noms sont générés depuis le nom du fichier source.",
+    "run": "Exporter les modèles"
   },
-  "collisions": { "label": "Exporter les collisions si dispo", "hint": "Si le pipeline produit des .ybn, incluez-les. Sinon, l’objet peut mal se comporter en jeu." },
-  "status": { "ready": "Prêt.", "missingPython": "Python non détecté. Installez Python 3.10+ ou utilisez l’installateur.", "missingGtav": "Sélectionnez le dossier GTA V Legacy pour vanilla.", "pickOutput": "Sélectionnez d’abord un dossier de sortie." },
-  "footer": { "docs": "Documentation", "repoNote": "Dépôt GitHub privé recommandé. Ne commitez pas de chemins locaux ni de secrets." }
+  "categories": {
+    "modelsLabel": "Catégories — modèles",
+    "previewsLabel": "Catégories — aperçus",
+    "hint": "Sélectionnez une ou plusieurs catégories. Chacune a son dossier (avec sous-dossiers male/female).",
+    "all": "Tout",
+    "none": "Effacer",
+    "items": {
+      "head": "Tête (chapeaux/casques)",
+      "berd": "Masques/barbes (berd)",
+      "hair": "Cheveux",
+      "uppr": "Haut (uppr)",
+      "lowr": "Bas (lowr)",
+      "hand": "Mains/sacs (hand)",
+      "feet": "Pieds",
+      "teef": "Dents (teef)",
+      "accs": "Accessoires (accs)",
+      "task": "Armure (task)",
+      "decl": "Decals (decl)",
+      "jbib": "Tops/vestes (jbib)",
+      "props_p_head": "Prop : chapeaux (p_head)",
+      "props_p_eyes": "Prop : lunettes (p_eyes)",
+      "props_p_ears": "Prop : oreilles (p_ears)",
+      "props_p_rwrist": "Prop : poignet droit",
+      "props_p_lwrist": "Prop : poignet gauche"
+    }
+  },
+  "collisions": {
+    "label": "Exporter les collisions si dispo",
+    "hint": "Les fichiers .ybn sont inclus si la pipeline source les fournit."
+  },
+  "status": {
+    "ready": "Prêt.",
+    "missingGtav": "Sélectionnez le dossier GTA V Legacy pour vanilla.",
+    "pickOutput": "Sélectionnez d’abord un dossier racine.",
+    "pickCategories": "Sélectionnez au moins une catégorie."
+  },
+  "footer": {
+    "docs": "Documentation"
+  },
+  "validation": {
+    "gtavOk": "Installation GTA V valide",
+    "gtavBad": "Dossier invalide : GTA5.exe et update/x64 introuvables",
+    "addonFound": "{count} fichiers vêtement trouvés ({ydd} .ydd, {ytd} .ytd)",
+    "addonEmpty": "Aucun fichier .ydd/.ytd trouvé",
+    "addonBad": "Dossier invalide ou illisible",
+    "scanning": "Analyse des sous-dossiers…"
+  },
+  "progress": {
+    "idle": "Inactif.",
+    "starting": "Démarrage…",
+    "models": "Export des modèles…",
+    "previews": "Rendu des aperçus…",
+    "done": "Terminé.",
+    "failed": "Échec.",
+    "core": "Traitement des fichiers"
+  },
+  "log": {
+    "title": "Journal",
+    "clear": "Effacer",
+    "empty": "Aucun message.",
+    "success": "Succès",
+    "error": "Erreur",
+    "info": "Info"
+  }
 }

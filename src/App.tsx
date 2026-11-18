@@ -1,261 +1,291 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { open } from "@tauri-apps/plugin-dialog";
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import i18n from "./i18n";
 
 type SourceMode = "vanilla" | "addon" | "both";
+type ExportMode = "models" | "previews" | "both";
+type LogLevel = "info" | "success" | "error";
+type ProgressEvent =
+  | { kind: "started" | "step"; message: string; current: number; total: number }
+  | { kind: "core"; message: string; current: number; total: number }
+  | { kind: "log"; level: LogLevel; message: string }
+  | { kind: "finished"; message: string; ok: boolean };
+
+const CATEGORY_OPTIONS = [
+  "head", "berd", "hair", "uppr", "lowr", "feet", "teef", "accs", "task", "decl", "jbib",
+  "props_p_head", "props_p_eyes", "props_p_ears", "props_p_rwrist", "props_p_lwrist"
+] as const;
+type CatId = (typeof CATEGORY_OPTIONS)[number];
+
+function CategoryPicker({
+  selected, onChange, title, hint, t
+}: {
+  selected: CatId[]; onChange: (next: CatId[]) => void; title: string; hint: string;
+  t: (k: string) => string;
+}) {
+  function toggle(id: CatId) {
+    onChange(selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id]);
+  }
+  return (
+    <div className="cat-block">
+      <div className="cat-head">
+        <h3>{title}</h3>
+        <div className="cat-actions">
+          <button type="button" className="btn btn-mini" onClick={() => onChange([...CATEGORY_OPTIONS])}>{t("categories.all")}</button>
+          <button type="button" className="btn btn-mini" onClick={() => onChange([])}>{t("categories.none")}</button>
+        </div>
+      </div>
+      <div className="hint" style={{ marginBottom: 10 }}>{hint}</div>
+      <div className="category-grid">
+        {CATEGORY_OPTIONS.map((c) => {
+          const checked = selected.includes(c);
+          return (
+            <label key={c} className={`check-card${checked ? " checked" : ""}`}>
+              <input type="checkbox" checked={checked} onChange={() => toggle(c)} />
+              <span className="check-box" aria-hidden="true"><span className="check-mark">✓</span></span>
+              <span className="check-label">{t(`categories.items.${c}`)}</span>
+            </label>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 export default function App() {
   const { t } = useTranslation();
-  const [sourceMode, setSourceMode] = useState<SourceMode>("vanilla");
+  const [sourceMode, setSourceMode] = useState<SourceMode>("both");
   const [gtavPath, setGtavPath] = useState("");
-  const [addonFolders, setAddonFolders] = useState<string[]>([]);
-  const [outPreviews, setOutPreviews] = useState("");
-  const [outModels, setOutModels] = useState("");
+  const [gtavValid, setGtavValid] = useState<boolean | null>(null);
+  const [addonFolders, setAddonFolders] = useState<{ path: string; ydd: number; ytd: number }[]>([]);
+  const [outputRoot, setOutputRoot] = useState("");
   const [imgSize, setImgSize] = useState("256");
   const [imgFormat, setImgFormat] = useState("png");
   const [exportCollisions, setExportCollisions] = useState(true);
-  const [slot, setSlot] = useState("hat");
-  const [drawable, setDrawable] = useState("0");
-  const [texture, setTexture] = useState("0");
-  const [modelName, setModelName] = useState("");
+  const [exportMode, setExportMode] = useState<ExportMode>("both");
+  const [modelCategories, setModelCategories] = useState<CatId[]>(["props_p_head"]);
+  const [previewCategories, setPreviewCategories] = useState<CatId[]>(["props_p_head"]);
+  const [busy, setBusy] = useState(false);
+  const [prep, setPrep] = useState<{ current: number; total: number; message: string }>({ current: 0, total: 0, message: "" });
+  const [core, setCore] = useState<{ current: number; total: number; message: string }>({ current: 0, total: 0, message: "" });
+  const [logs, setLogs] = useState<{ level: LogLevel; message: string }[]>([]);
 
-  const statusMessage = useMemo(() => {
-    if (sourceMode !== "addon" && !gtavPath.trim()) return t("status.missingGtav");
-    return t("status.ready");
-  }, [sourceMode, gtavPath, t]);
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    listen<ProgressEvent>("wct://progress", (e) => {
+      const p = e.payload;
+      if (p.kind === "started") {
+        setPrep({ current: 0, total: p.total, message: p.message });
+      } else if (p.kind === "step") {
+        setPrep({ current: p.current, total: p.total, message: p.message });
+      } else if (p.kind === "core") {
+        setCore({ current: p.current, total: p.total, message: p.message });
+      } else if (p.kind === "log") {
+        setLogs((prev) => [...prev, { level: p.level, message: p.message }]);
+      } else if (p.kind === "finished") {
+        setLogs((prev) => [...prev, { level: p.ok ? "success" : "error", message: p.message }]);
+      }
+    }).then((fn) => { unlisten = fn; });
+    return () => { unlisten?.(); };
+  }, []);
+
+  async function validateGtav(path: string) {
+    setGtavPath(path);
+    if (!path.trim()) { setGtavValid(null); return; }
+    try { setGtavValid(await invoke<boolean>("validate_gtav", { path })); }
+    catch { setGtavValid(false); }
+  }
+
+  async function addAddonFolder() {
+    const selected = await open({ directory: true, multiple: false });
+    if (typeof selected !== "string" || addonFolders.some((f) => f.path === selected)) return;
+    try {
+      const [ydd, ytd] = await invoke<[number, number]>("validate_addon", { path: selected });
+      setAddonFolders((prev) => [...prev, { path: selected, ydd, ytd }]);
+    } catch {
+      setAddonFolders((prev) => [...prev, { path: selected, ydd: 0, ytd: 0 }]);
+    }
+  }
 
   async function pickDirectory(setter: (v: string) => void) {
     const selected = await open({ directory: true, multiple: false });
     if (typeof selected === "string") setter(selected);
   }
 
-  async function addAddonFolder() {
-    const selected = await open({ directory: true, multiple: false });
-    if (typeof selected === "string" && !addonFolders.includes(selected)) {
-      setAddonFolders((prev) => [...prev, selected]);
-    }
-  }
-
   function changeLang(lng: string) {
     void i18n.changeLanguage(lng);
+    try { localStorage.setItem("wct_lang", lng); } catch { /* ignore */ }
+  }
+
+  const prepPct = useMemo(() => prep.total ? Math.min(100, Math.round(prep.current / prep.total * 100)) : 0, [prep]);
+  const corePct = useMemo(() => core.total ? Math.min(100, Math.round(core.current / core.total * 100)) : 0, [core]);
+
+  async function runExport() {
+    if (!outputRoot.trim()) { setLogs((p) => [...p, { level: "error", message: t("status.pickOutput") }]); return; }
+    const cats = exportMode === "models" ? modelCategories : exportMode === "previews" ? previewCategories : [...new Set([...modelCategories, ...previewCategories])];
+    if (cats.length === 0) { setLogs((p) => [...p, { level: "error", message: t("status.pickCategories") }]); return; }
+    setBusy(true);
+    setLogs([]);
+    setPrep({ current: 0, total: 0, message: "" });
+    setCore({ current: 0, total: 0, message: "" });
     try {
-      localStorage.setItem("wct_lang", lng);
-    } catch {
-      /* ignore */
-    }
+      const res = await invoke<string>("export_assets", {
+        payload: {
+          outRoot: outputRoot,
+          exportMode,
+          modelCategories,
+          previewCategories,
+          imgSize: Number(imgSize),
+          imgFormat,
+          gtavPath: sourceMode === "addon" ? null : gtavPath,
+          addonFolders: addonFolders.map((f) => f.path),
+          exportCollisions
+        }
+      });
+      setLogs((p) => [...p, { level: "success", message: res }]);
+    } catch (e) {
+      setLogs((p) => [...p, { level: "error", message: String(e) }]);
+    } finally { setBusy(false); }
   }
 
   return (
     <div className="app">
       <header>
-        <div>
-          <h1>{t("app.title")}</h1>
-          <p className="subtitle">{t("app.subtitle")}</p>
-        </div>
+        <div><h1>{t("app.title")}</h1><p className="subtitle">{t("app.subtitle")}</p></div>
         <div className="lang-select">
           <label htmlFor="lang">{t("language.label")}</label>
-          <select
-            id="lang"
-            value={i18n.resolvedLanguage || "en"}
-            onChange={(e) => changeLang(e.target.value)}
-          >
-            <option value="en">English</option>
-            <option value="it">Italiano</option>
-            <option value="es">Español</option>
-            <option value="fr">Français</option>
-            <option value="de">Deutsch</option>
+          <select id="lang" value={i18n.resolvedLanguage || "en"} onChange={(e) => changeLang(e.target.value)}>
+            <option value="en">English</option><option value="it">Italiano</option><option value="es">Español</option><option value="fr">Français</option><option value="de">Deutsch</option>
           </select>
         </div>
       </header>
 
-      <div className="grid two">
-        <section className="card">
-          <h2>{t("source.label")}</h2>
-          <div className="field">
-            <div className="radio-group" role="radiogroup" aria-label={t("source.label")}>
-              {(["vanilla", "addon", "both"] as SourceMode[]).map((m) => (
-                <label key={m}>
-                  <input
-                    type="radio"
-                    name="source"
-                    checked={sourceMode === m}
-                    onChange={() => setSourceMode(m)}
-                  />
-                  {t(`source.${m}`)}
-                </label>
-              ))}
-            </div>
+      <section className="card">
+        <h2>{t("source.label")}</h2>
+        <div className="field">
+          <div className="radio-group" role="radiogroup" aria-label={t("source.label")}>
+            {(["vanilla", "addon", "both"] as SourceMode[]).map((m) => (
+              <label key={m}><input type="radio" name="source" checked={sourceMode === m} onChange={() => setSourceMode(m)} />{t(`source.${m}`)}</label>
+            ))}
           </div>
-
-          {(sourceMode === "vanilla" || sourceMode === "both") && (
-            <div className="field">
-              <label>{t("paths.gtavLegacy")}</label>
-              <div className="row">
-                <input
-                  type="text"
-                  value={gtavPath}
-                  onChange={(e) => setGtavPath(e.target.value)}
-                  placeholder="G:\Games\Epic Games\GTAV"
-                />
-                <button type="button" className="btn" onClick={() => void pickDirectory(setGtavPath)}>
-                  {t("paths.browse")}
-                </button>
-              </div>
-              <div className="hint">{t("paths.gtavLegacyHint")}</div>
-            </div>
-          )}
-
-          {(sourceMode === "addon" || sourceMode === "both") && (
-            <div className="field">
-              <label>{t("paths.addonFolders")}</label>
-              <button type="button" className="btn" onClick={() => void addAddonFolder()}>
-                {t("paths.addFolder")}
-              </button>
-              <div className="hint">{t("paths.addonFoldersHint")}</div>
-              {addonFolders.length > 0 && (
-                <div className="chips">
-                  {addonFolders.map((f) => (
-                    <span className="chip" key={f}>
-                      {f}
-                      <button
-                        type="button"
-                        aria-label={t("paths.remove")}
-                        onClick={() => setAddonFolders((prev) => prev.filter((x) => x !== f))}
-                      >
-                        ×
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </section>
-
-        <section className="card">
-          <h2>{t("previews.title")}</h2>
+        </div>
+        {(sourceMode === "vanilla" || sourceMode === "both") && (
           <div className="field">
-            <label>{t("paths.outputPreviews")}</label>
+            <label>{t("paths.gtavLegacy")}</label>
             <div className="row">
-              <input
-                type="text"
-                value={outPreviews}
-                onChange={(e) => setOutPreviews(e.target.value)}
-                readOnly
-              />
-              <button type="button" className="btn" onClick={() => void pickDirectory(setOutPreviews)}>
-                {t("paths.browse")}
-              </button>
+              <input type="text" value={gtavPath} onChange={(e) => setGtavPath(e.target.value)} onBlur={(e) => void validateGtav(e.target.value)} placeholder="" />
+              <button type="button" className="btn" onClick={async () => { const p = await open({ directory: true, multiple: false }); if (typeof p === "string") await validateGtav(p); }}>{t("paths.browse")}</button>
             </div>
+            <div className="hint">{t("paths.gtavLegacyHint")}</div>
+            {gtavValid !== null && (
+              <div className={`badge ${gtavValid ? "ok" : "bad"}`}>
+                {gtavValid ? t("validation.gtavOk") : t("validation.gtavBad")}
+              </div>
+            )}
           </div>
+        )}
+        {(sourceMode === "addon" || sourceMode === "both") && (
           <div className="field">
-            <label htmlFor="imgSize">{t("previews.size")}</label>
-            <input
-              id="imgSize"
-              type="number"
-              min={64}
-              max={4096}
-              value={imgSize}
-              onChange={(e) => setImgSize(e.target.value)}
-            />
-            <div className="hint">{t("previews.sizeHint")}</div>
+            <label>{t("paths.addonFolders")}</label>
+            <button type="button" className="btn" onClick={() => void addAddonFolder()}>{t("paths.addFolder")}</button>
+            <div className="hint">{t("paths.addonFoldersHint")}</div>
+            {addonFolders.length > 0 && (
+              <div className="chips">
+                {addonFolders.map((f) => (
+                  <span className="chip" key={f.path}>
+                    {f.path}
+                    <span className={`chip-count ${f.ydd + f.ytd > 0 ? "ok" : "bad"}`}>
+                      {f.ydd + f.ytd > 0 ? t("validation.addonFound", { count: f.ydd + f.ytd, ydd: f.ydd, ytd: f.ytd }) : t("validation.addonEmpty")}
+                    </span>
+                    <button type="button" aria-label={t("paths.remove")} onClick={() => setAddonFolders((prev) => prev.filter((x) => x.path !== f.path))}>×</button>
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
-          <div className="field">
-            <label htmlFor="imgFormat">{t("previews.format")}</label>
-            <select id="imgFormat" value={imgFormat} onChange={(e) => setImgFormat(e.target.value)}>
-              <option value="png">PNG</option>
-              <option value="webp">WebP</option>
-              <option value="jpeg">JPEG</option>
-            </select>
-            <div className="hint">{t("previews.transparentNote")}</div>
-          </div>
-          <div className="field">
-            <button type="button" className="btn primary" disabled title={t("previews.run")}>
-              {t("previews.run")}
-            </button>
-          </div>
-        </section>
-      </div>
+        )}
+      </section>
 
       <section className="card" style={{ marginTop: 20 }}>
-        <h2>{t("models.title")}</h2>
-        <p className="hint" style={{ marginTop: 0 }}>{t("models.note")}</p>
+        <h2>{t("export.title")}</h2>
         <div className="field">
-          <label>{t("paths.outputModels")}</label>
+          <label>{t("paths.outputRoot")}</label>
           <div className="row">
-            <input
-              type="text"
-              value={outModels}
-              onChange={(e) => setOutModels(e.target.value)}
-              readOnly
-            />
-            <button type="button" className="btn" onClick={() => void pickDirectory(setOutModels)}>
-              {t("paths.browse")}
-            </button>
+            <input type="text" value={outputRoot} onChange={(e) => setOutputRoot(e.target.value)} readOnly />
+            <button type="button" className="btn" onClick={() => void pickDirectory(setOutputRoot)}>{t("paths.browse")}</button>
+          </div>
+          <div className="hint">{t("paths.outputRootHint")}</div>
+        </div>
+
+        <div className="field">
+          <label>{t("export.mode")}</label>
+          <div className="segmented" role="radiogroup" aria-label={t("export.mode")}>
+            {(["models", "previews", "both"] as ExportMode[]).map((m) => (
+              <button key={m} type="button" className={`seg${exportMode === m ? " active" : ""}`} onClick={() => setExportMode(m)}>{t(`export.${m}`)}</button>
+            ))}
           </div>
         </div>
-        <div className="field checkbox-row">
-          <input
-            id="coll"
-            type="checkbox"
-            checked={exportCollisions}
-            onChange={(e) => setExportCollisions(e.target.checked)}
-          />
-          <div>
-            <label htmlFor="coll" style={{ marginBottom: 2 }}>{t("collisions.label")}</label>
-            <div className="hint">{t("collisions.hint")}</div>
+
+        {(exportMode === "models" || exportMode === "both") && (
+          <CategoryPicker title={t("categories.modelsLabel")} hint={t("categories.hint")} selected={modelCategories} onChange={setModelCategories} t={t} />
+        )}
+        {(exportMode === "previews" || exportMode === "both") && (
+          <CategoryPicker title={t("categories.previewsLabel")} hint={t("categories.hint")} selected={previewCategories} onChange={setPreviewCategories} t={t} />
+        )}
+
+        {(exportMode === "previews" || exportMode === "both") && (
+          <div className="grid two" style={{ marginTop: 12 }}>
+            <div className="field">
+              <label htmlFor="imgSize">{t("previews.size")}</label>
+              <input id="imgSize" type="number" min={64} max={4096} value={imgSize} onChange={(e) => setImgSize(e.target.value)} />
+              <div className="hint">{t("previews.sizeHint")}</div>
+            </div>
+            <div className="field">
+              <label htmlFor="imgFormat">{t("previews.format")}</label>
+              <select id="imgFormat" value={imgFormat} onChange={(e) => setImgFormat(e.target.value)}>
+                <option value="png">PNG</option><option value="webp">WebP</option><option value="jpeg">JPEG</option>
+              </select>
+              <div className="hint">{t("previews.transparentNote")}</div>
+            </div>
           </div>
-        </div>
-        <div className="grid two" style={{ marginTop: 12 }}>
-          <div className="field">
-            <label htmlFor="slot">{t("models.slot")}</label>
-            <input id="slot" type="text" value={slot} onChange={(e) => setSlot(e.target.value)} />
+        )}
+
+        {(exportMode === "models" || exportMode === "both") && (
+          <div className="field checkbox-row" style={{ marginTop: 8 }}>
+            <input id="coll" type="checkbox" checked={exportCollisions} onChange={(e) => setExportCollisions(e.target.checked)} />
+            <div><label htmlFor="coll" style={{ marginBottom: 2 }}>{t("collisions.label")}</label><div className="hint">{t("collisions.hint")}</div></div>
           </div>
-          <div className="field">
-            <label htmlFor="modelName">{t("models.modelName")}</label>
-            <input
-              id="modelName"
-              type="text"
-              value={modelName}
-              onChange={(e) => setModelName(e.target.value)}
-              placeholder="cw_my_item"
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="drawable">{t("models.drawable")}</label>
-            <input
-              id="drawable"
-              type="number"
-              value={drawable}
-              onChange={(e) => setDrawable(e.target.value)}
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="texture">{t("models.texture")}</label>
-            <input
-              id="texture"
-              type="number"
-              value={texture}
-              onChange={(e) => setTexture(e.target.value)}
-            />
-          </div>
+        )}
+
+        <div className="field" style={{ marginTop: 12 }}>
+          <div className="progress-head"><span>{t("progress.preparing") || prep.message || t("progress.idle")}</span><span>{prep.current}/{prep.total || 0}</span></div>
+          <div className="progress-track"><div className="progress-fill" style={{ width: `${prepPct}%` }} /></div>
         </div>
         <div className="field">
-          <button type="button" className="btn primary" disabled title={t("models.run")}>
-            {t("models.run")}
+          <div className="progress-head"><span>{t("progress.core")}: {core.message || t("progress.idle")}</span><span>{core.current}/{core.total || 0}</span></div>
+          <div className="progress-track"><div className="progress-fill core" style={{ width: `${corePct}%` }} /></div>
+        </div>
+
+        <div className="field">
+          <div className="log-head"><h3>{t("log.title")}</h3><button type="button" className="btn btn-mini" onClick={() => setLogs([])}>{t("log.clear")}</button></div>
+          <div className="log-box">
+            {logs.length === 0 ? <div className="hint">{t("log.empty")}</div> : logs.map((l, i) => (
+              <div key={i} className={`log-line ${l.level}`}><span className="log-tag">{t(`log.${l.level}`)}</span>{l.message}</div>
+            ))}
+          </div>
+        </div>
+
+        <div className="field">
+          <button type="button" className="btn primary btn-lg" disabled={busy} onClick={() => void runExport()}>
+            {busy ? t("export.running") : t("export.run")}
           </button>
         </div>
       </section>
 
-      <div className="status">{statusMessage}</div>
-
-      <footer>
-        <div>
-          {t("footer.docs")}: <code>README.md</code>, <code>docs/i18n/</code>
-        </div>
-        <div style={{ marginTop: 6 }}>{t("footer.repoNote")}</div>
-      </footer>
+      <footer><div>{t("footer.docs")}: <code>README.md</code>, <code>docs/i18n/</code></div></footer>
     </div>
   );
 }
