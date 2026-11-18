@@ -641,6 +641,96 @@ def build_tasks(job: dict, ydds: list, ytds: list, out_root: Path) -> list[dict]
 # Main export
 # ---------------------------------------------------------------------------
 
+def patch_szio_skeleton_loader() -> None:
+    """Make szio tolerate addon drawables with broken bone references.
+
+    Several third-party .ydd packs contain a ``None`` entry in a bone's
+    children. szio's ``_add_bone`` dereferences it unconditionally, so the
+    whole drawable fails to load before any model or preview can be produced.
+    Skipping only the invalid bones keeps the rest of the skeleton intact.
+    """
+    try:
+        from szio.gta5.native.adapters import drawable as adapter
+        if not callable(getattr(adapter, "_load_skeleton_native", None)):
+            return
+        if getattr(adapter, "_wct_skeleton_patched", False):
+            return
+
+        Vector = adapter.Vector
+        Quaternion = adapter.Quaternion
+        SkelBone = adapter.SkelBone
+        SkelBoneFlags = adapter.SkelBoneFlags
+        SkelBoneTranslationLimit = adapter.SkelBoneTranslationLimit
+        SkelBoneRotationLimit = adapter.SkelBoneRotationLimit
+        Skeleton = adapter.Skeleton
+        pm = adapter.pm
+    except Exception as exc:
+        log("error", f"Could not patch szio skeleton loader: {exc}")
+        return
+
+    def translation_limit(limit):
+        if limit is None:
+            return None
+        try:
+            return SkelBoneTranslationLimit(Vector(limit.min), Vector(limit.max))
+        except Exception:
+            return None
+
+    def rotation_limit(limit):
+        if limit is None:
+            return None
+        try:
+            assert limit.num_control_points == 1
+            assert limit.degrees_of_freedom == pm.BoneJointDofs.JOINT_3_DOF
+            assert limit.use_euler_angles
+            p0, p1 = limit.control_points[:2]
+            return SkelBoneRotationLimit(
+                Vector((p0.max_swing, p0.min_twist, p0.max_twist)),
+                Vector((p1.max_swing, p1.min_twist, p1.max_twist)),
+            )
+        except Exception:
+            return None
+
+    def robust_load_skeleton(d):
+        bones = []
+
+        def add_bone(b, parent_index):
+            if b is None:
+                return
+            try:
+                px, py, pz, _ = b.default_translation
+                rx, ry, rz, rw = b.default_rotation
+                sx, sy, sz, _ = b.default_scale
+            except Exception:
+                return
+            index = len(bones)
+            bones.append(SkelBone(
+                name=b.name,
+                tag=b.id,
+                flags=SkelBoneFlags(b.degrees_of_freedom),
+                position=Vector((px, py, pz)),
+                rotation=Quaternion((rw, rx, ry, rz)),
+                scale=Vector((sx, sy, sz)),
+                parent_index=parent_index,
+                translation_limit=translation_limit(b.translation_limit),
+                rotation_limit=rotation_limit(b.rotation_limit),
+            ))
+            for child in b.children or []:
+                if child is not None:
+                    add_bone(child, index)
+
+        try:
+            if d.skeleton is not None and d.skeleton.root_bone is not None:
+                add_bone(d.skeleton.root_bone, -1)
+        except Exception as exc:
+            log("error", f"Skeleton partially skipped: {exc}")
+        return Skeleton(bones) if bones else None
+
+    adapter._load_skeleton_native = robust_load_skeleton
+    adapter._wct_skeleton_patched = True
+    log("info", "Patched szio skeleton loader for invalid addon bones")
+
+
 def export(job: dict) -> None:
     out_root = Path(job.get("outRoot", ""))
     if not str(out_root):
@@ -648,6 +738,7 @@ def export(job: dict) -> None:
     out_root.mkdir(parents=True, exist_ok=True)
 
     ensure_sollumz()
+    patch_szio_skeleton_loader()
     from szio import save_asset, try_load_asset
     from szio.gta5.assets import AssetFormat, AssetTarget, AssetVersion, SaveOptions
 
