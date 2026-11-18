@@ -19,6 +19,33 @@ const CATEGORY_OPTIONS = [
   "props_p_head", "props_p_eyes", "props_p_ears", "props_p_rwrist", "props_p_lwrist"
 ] as const;
 type CatId = (typeof CATEGORY_OPTIONS)[number];
+type AddonFolder = { path: string; ydd: number; ytd: number };
+
+type Settings = {
+  sourceMode: SourceMode;
+  gtavPath: string;
+  addonFolders: AddonFolder[];
+  outputRoot: string;
+  imgSize: string;
+  imgFormat: string;
+  exportCollisions: boolean;
+  exportMode: ExportMode;
+  modelCategories: CatId[];
+  previewCategories: CatId[];
+};
+
+const SETTINGS_KEY = "wct_settings";
+
+function loadSettings(): Partial<Settings> {
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY);
+    return raw ? JSON.parse(raw) as Partial<Settings> : {};
+  } catch {
+    return {};
+  }
+}
+
+const saved = loadSettings();
 
 function CategoryPicker({
   selected, onChange, title, hint, t
@@ -57,17 +84,23 @@ function CategoryPicker({
 
 export default function App() {
   const { t } = useTranslation();
-  const [sourceMode, setSourceMode] = useState<SourceMode>("both");
-  const [gtavPath, setGtavPath] = useState("");
+  const [sourceMode, setSourceMode] = useState<SourceMode>(saved.sourceMode ?? "both");
+  const [gtavPath, setGtavPath] = useState(saved.gtavPath ?? "");
   const [gtavValid, setGtavValid] = useState<boolean | null>(null);
-  const [addonFolders, setAddonFolders] = useState<{ path: string; ydd: number; ytd: number }[]>([]);
-  const [outputRoot, setOutputRoot] = useState("");
-  const [imgSize, setImgSize] = useState("256");
-  const [imgFormat, setImgFormat] = useState("png");
-  const [exportCollisions, setExportCollisions] = useState(true);
-  const [exportMode, setExportMode] = useState<ExportMode>("both");
-  const [modelCategories, setModelCategories] = useState<CatId[]>(["props_p_head"]);
-  const [previewCategories, setPreviewCategories] = useState<CatId[]>(["props_p_head"]);
+  const [addonFolders, setAddonFolders] = useState<AddonFolder[]>(
+    Array.isArray(saved.addonFolders) ? saved.addonFolders : []
+  );
+  const [outputRoot, setOutputRoot] = useState(saved.outputRoot ?? "");
+  const [imgSize, setImgSize] = useState(saved.imgSize ?? "256");
+  const [imgFormat, setImgFormat] = useState(saved.imgFormat ?? "png");
+  const [exportCollisions, setExportCollisions] = useState(saved.exportCollisions ?? true);
+  const [exportMode, setExportMode] = useState<ExportMode>(saved.exportMode ?? "both");
+  const [modelCategories, setModelCategories] = useState<CatId[]>(
+    Array.isArray(saved.modelCategories) ? saved.modelCategories : ["props_p_head"]
+  );
+  const [previewCategories, setPreviewCategories] = useState<CatId[]>(
+    Array.isArray(saved.previewCategories) ? saved.previewCategories : ["props_p_head"]
+  );
   const [busy, setBusy] = useState(false);
   const [prep, setPrep] = useState<{ current: number; total: number; message: string }>({ current: 0, total: 0, message: "" });
   const [core, setCore] = useState<{ current: number; total: number; message: string }>({ current: 0, total: 0, message: "" });
@@ -90,6 +123,31 @@ export default function App() {
       }
     }).then((fn) => { unlisten = fn; });
     return () => { unlisten?.(); };
+  }, []);
+
+  // Persist every user choice so the next launch reopens with the same setup.
+  useEffect(() => {
+    const settings: Settings = {
+      sourceMode, gtavPath, addonFolders, outputRoot, imgSize, imgFormat,
+      exportCollisions, exportMode, modelCategories, previewCategories
+    };
+    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch { /* ignore */ }
+  }, [sourceMode, gtavPath, addonFolders, outputRoot, imgSize, imgFormat,
+      exportCollisions, exportMode, modelCategories, previewCategories]);
+
+  // Re-check saved folders on startup: paths may have moved or been deleted.
+  useEffect(() => {
+    if (saved.gtavPath) void validateGtav(saved.gtavPath);
+    const paths = Array.isArray(saved.addonFolders) ? saved.addonFolders.map((f) => f.path) : [];
+    if (paths.length === 0) return;
+    void Promise.all(paths.map(async (path): Promise<AddonFolder> => {
+      try {
+        const [ydd, ytd] = await invoke<[number, number]>("validate_addon", { path });
+        return { path, ydd, ytd };
+      } catch {
+        return { path, ydd: 0, ytd: 0 };
+      }
+    })).then(setAddonFolders);
   }, []);
 
   async function validateGtav(path: string) {
