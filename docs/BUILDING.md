@@ -35,6 +35,8 @@ src-tauri/target/release/core/blender_export.py
 
 Copy the `core/` folder next to the exe when distributing the portable build.
 
+Because `bundle.active = false`, the `tauri` dependency must keep the `custom-protocol` feature enabled. Without it the release binary falls back to the Vite dev URL (`http://localhost:1420`) and shows “Unable to reach this page” instead of the UI. Run `npm run build` before `cargo build --release` so the current `dist/` assets are embedded.
+
 ## Runtime discovery
 
 The app looks for Blender in this order:
