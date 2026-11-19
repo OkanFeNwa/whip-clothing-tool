@@ -871,9 +871,27 @@ def body_from_source(src, name: str) -> str:
 
 
 def collection_from_body(body: str) -> str:
-    if not body or "freemode_01" in body.lower():
+    """Stable, collision-free token for the ped collection a file belongs to.
+
+    The drawable number in a .ydd filename is only the LOCAL index inside its
+    collection. Several DLC/add-on packs ship ``p_head_005.ydd`` in different
+    collections, and they are different items. The old implementation mapped
+    every body containing ``freemode_01`` to ``np``, so all of them collided on
+    the same model name. The runtime identity (GetPedCollectionNameFromProp +
+    GetPedCollectionLocalIndexFromProp) needs this token to find the right one.
+
+    ``np`` stays reserved for the base freemode collection so existing model
+    names and registries remain valid.
+    """
+    low = (body or "").lower()
+    if not low:
         return "np"
-    return body.lower().split("_")[-1]
+    token = re.sub(r"^mp_[mf]_", "", low)
+    token = re.sub(r"^freemode_01_p_?", "", token)
+    token = re.sub(r"^mp_[mf]_", "", token)
+    token = re.sub(r"^p_", "", token)
+    token = re.sub(r"[^a-z0-9]+", "", token)
+    return token or "np"
 
 
 def gender_from_body(body: str, src) -> str:
@@ -1107,9 +1125,18 @@ def build_tasks(job: dict, ydds: list, ytds: list, out_root: Path) -> list[dict]
     # for p_eyes_000.ydd in the base RPF), in which case the export worker
     # swaps in the next candidate with real geometry. Building this after
     # dedupe_sources() would leave only the placeholder itself.
+    def alternatives_key(p: dict) -> tuple:
+        # The base collection keeps the historical cross-collection fallback:
+        # p_eyes_000.ydd in streamedpedprops.rpf is a 4-vertex stub and only a
+        # DLC copy carries real glasses geometry. Other collections must not
+        # borrow geometry from a different item with the same local index.
+        if p["collection"] == "np":
+            return (p["gender"], p["part"], p["draw"])
+        return (p["gender"], p["part"], p["collection"], p["draw"])
+
     ydd_alternatives: dict[tuple, list[dict]] = {}
     for item in parsed_ydd:
-        key = (item["gender"], item["part"], item["draw"])
+        key = alternatives_key(item)
         ydd_alternatives.setdefault(key, []).append(item)
     for key in ydd_alternatives:
         ydd_alternatives[key].sort(
@@ -1117,20 +1144,36 @@ def build_tasks(job: dict, ydds: list, ytds: list, out_root: Path) -> list[dict]
         )
 
     parsed_ydd = dedupe_sources(
-        parsed_ydd, lambda p: (p["gender"], p["part"], p["draw"]), "drawable files"
+        parsed_ydd,
+        lambda p: (p["gender"], p["part"], p["collection"], p["draw"]),
+        "drawable files",
     )
 
-    parsed_ytd = dedupe_sources(
+    # The base collection keeps the historical "one texture per index across all
+    # collections" rule: indices 0-7 come from streamedpedprops.rpf and 8-25 from
+    # whichever DLC ships an extra variant of the SAME base drawable. Deducing
+    # textures per collection here would multiply every base drawable by every
+    # themed pack and produce thousands of wrong variants.
+    ytd_wildcard = dedupe_sources(
         parsed_ytd,
         lambda p: (p["gender"], p["part"], p["draw"], p["texIndex"]),
-        "texture files",
+        "base texture files",
+    )
+    ytd_per_collection = dedupe_sources(
+        parsed_ytd,
+        lambda p: (p["gender"], p["part"], p["collection"], p["draw"], p["texIndex"]),
+        "collection texture files",
     )
 
     ytd_by_key: dict[tuple, list[dict]] = {}
-    for tex in parsed_ytd:
+    for tex in ytd_per_collection:
         key = (tex["gender"], tex["part"], tex["draw"], tex["collection"])
         ytd_by_key.setdefault(key, []).append(tex)
-        ytd_by_key.setdefault((tex["gender"], tex["part"], tex["draw"], "*"), []).append(tex)
+    ytd_wildcard_by_key: dict[tuple, list[dict]] = {}
+    for tex in ytd_wildcard:
+        ytd_wildcard_by_key.setdefault(
+            (tex["gender"], tex["part"], tex["draw"]), []
+        ).append(tex)
 
     mode = job.get("exportMode", "both")
     model_cats = job.get("modelCategories", []) or []
@@ -1158,12 +1201,14 @@ def build_tasks(job: dict, ydds: list, ytds: list, out_root: Path) -> list[dict]
             and is_base_prop_source(item["source"])
         ):
             textures = list(
-                ytd_by_key.get((item["gender"], item["part"], item["draw"], "*"), [])
+                ytd_wildcard_by_key.get((item["gender"], item["part"], item["draw"]), [])
             )
         else:
             textures = ytd_by_key.get(
                 (item["gender"], item["part"], item["draw"], item["collection"]), []
-            ) or ytd_by_key.get((item["gender"], item["part"], item["draw"], "*"), [])
+            ) or ytd_wildcard_by_key.get(
+                (item["gender"], item["part"], item["draw"]), []
+            )
 
         textures = sorted(textures, key=lambda t: (t["texIndex"], t["name"])) or [None]
         for cat, kind in pairs:
@@ -1181,7 +1226,7 @@ def build_tasks(job: dict, ydds: list, ytds: list, out_root: Path) -> list[dict]
                     "ydd": item["source"],
                     "yddName": item["name"],
                     "yddAlternatives": ydd_alternatives.get(
-                        (item["gender"], item["part"], item["draw"]), []
+                        alternatives_key(item), []
                     ),
                     "textures": [tex] if tex else [],
                     "modelDir": out_root / "models" / f"whip_media_clothing_{item['gender']}" / "img" / "clothing" / item["gender"] / folder,
@@ -1338,7 +1383,10 @@ def export(job: dict) -> None:
 
         asset_cache: dict[str, object] = {}
         for index, task in enumerate(tasks, 1):
-            label = f"{task['gender']} {task['part']} #{task['draw']:03d} / {task['slot']}"
+            label = (
+                f"{task['gender']} {task['collection']} {task['part']} "
+                f"#{task['draw']:03d} / {task['slot']}"
+            )
             try:
                 # The preferred source can be a 4-vertex placeholder (notably
                 # p_eyes_000.ydd in the base RPF, while DLC packs carry the real
