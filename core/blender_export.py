@@ -1149,11 +1149,10 @@ def build_tasks(job: dict, ydds: list, ytds: list, out_root: Path) -> list[dict]
         "drawable files",
     )
 
-    # The base collection keeps the historical "one texture per index across all
-    # collections" rule: indices 0-7 come from streamedpedprops.rpf and 8-25 from
-    # whichever DLC ships an extra variant of the SAME base drawable. Deducing
-    # textures per collection here would multiply every base drawable by every
-    # themed pack and produce thousands of wrong variants.
+    # Wildcard textures are only a fallback for collections that ship no .ytd of
+    # their own. Base freemode props deliberately use ONLY indices 0-7 from the
+    # base RPF (see the filter in build_tasks): DLC .ytd files at indices 8-25
+    # are unrelated variants and are left to the registry's texture-0 fallback.
     ytd_wildcard = dedupe_sources(
         parsed_ytd,
         lambda p: (p["gender"], p["part"], p["draw"], p["texIndex"]),
@@ -1184,25 +1183,21 @@ def build_tasks(job: dict, ydds: list, ytds: list, out_root: Path) -> list[dict]
         pairs = categories_for_part(item["part"], model_cats, preview_cats, mode)
         if not pairs:
             continue
-        # Freemode props (hats/glasses) use the BASE geometry from
-        # streamedpedprops.rpf for every texture variant. The ped can wear
-        # texture indices 0-25: indices 0-7 ship in the base RPF (a-h), while
-        # indices 8-25 are added by DLC packs as extra .ytd variants for the
-        # SAME drawable. Both must be exported or the wheel falls back to the
-        # generic prop_cap_01 whenever the player picks a high texture.
-        #
-        # dedupe_sources() already chose the base .ytd for indices 0-7 (rank 0)
-        # and one DLC .ytd for 8-25. Use the "*" wildcard here so DLC textures
-        # are not discarded by the exact-collection lookup (base collection
-        # "np" has no entry for indices > 7).
+        # Restored rule: for the canonical base prop file the ped only uses
+        # texture variants a-h (indices 0-7) from that same folder. Higher
+        # indices exist only in unrelated DLC packs and used to put Christmas
+        # colours on the base hat. There is no in-game evidence that a ped
+        # wears them, so the wheel's texture-0 fallback handles those indices.
         if (
             item["part"] in ("p_head", "p_eyes")
             and item["collection"] == "np"
             and is_base_prop_source(item["source"])
         ):
-            textures = list(
-                ytd_wildcard_by_key.get((item["gender"], item["part"], item["draw"]), [])
-            )
+            textures = [
+                t for t in ytd_wildcard_by_key.get(
+                    (item["gender"], item["part"], item["draw"]), [])
+                if t["texIndex"] <= 7 and is_base_prop_source(t["source"])
+            ]
         else:
             textures = ytd_by_key.get(
                 (item["gender"], item["part"], item["draw"], item["collection"]), []

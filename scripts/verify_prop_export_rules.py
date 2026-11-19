@@ -11,8 +11,8 @@ It stubs the Blender-only modules, imports ``core/blender_export.py`` and
 checks that build_tasks() still applies the rules that keep dropped hats/glasses
 identical to the worn item:
 
-  1. base props export every wearable texture variant (0-25), including the
-     DLC-added ones for the same drawable;
+  1. base props export ONLY texture variants 0-7 from the base RPF; DLC-added
+     indices 8-25 are left to the registry's texture-0 fallback;
   2. every prop drawable keeps ranked .ydd alternatives, so a 4-vertex
      placeholder can be replaced by real geometry when one exists;
   3. the export key includes the ped collection, so two addon packs reusing
@@ -73,8 +73,19 @@ def check(label, tasks, module):
         and any(tex["texIndex"] > 7 for tex in t["textures"])
     )
     print(f"[{label}] base-prop tasks with texture index > 7: {high_textures}")
-    if high_textures == 0:
-        failures.append(f"{label}: DLC texture variants (8-25) are being discarded")
+    if high_textures:
+        failures.append(f"{label}: base props must only export texture indices 0-7")
+
+    base_textures = sum(
+        1
+        for t in tasks
+        if module.is_base_prop_source(t["ydd"])
+        and t["part"] in ("p_head", "p_eyes")
+        and any(tex["texIndex"] <= 7 for tex in t["textures"])
+    )
+    print(f"[{label}] base-prop tasks with texture indices 0-7: {base_textures}")
+    if base_textures == 0:
+        failures.append(f"{label}: base texture variants (0-7) are being discarded")
 
     missing = [t for t in tasks if not t.get("yddAlternatives")]
     print(f"[{label}] tasks without .ydd alternatives: {len(missing)}")
