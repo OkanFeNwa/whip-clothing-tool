@@ -40,6 +40,11 @@ No system Python installation is required: the real export work runs inside Blen
 
 If Blender is installed somewhere unusual, point the script at it with `-BlenderPath "C:\path\to\blender.exe"` or set `WCT_BLENDER` before launching the app.
 
+## Speed and log noise
+
+- **Parallel export.** The export runs several Blender processes at once (default: half of the CPU cores, 1 to 4). Set the environment variable `WCT_WORKERS` (1-8) to choose; `1` is the old single-process behaviour. The tasks of one source `.ydd` stay in one worker, the workers' manifests are merged into `export_manifest.json` and the `fxmanifest.lua` of each model resource is written from its `stream/` folder at the end. The very first export with a GTA V folder builds the archive index and uses one worker; the next ones are parallel. Output files and names are unchanged. Blender uses the GPU only for the preview renders, so the gain comes from the parallel processes.
+- **Log.** Blender's `DDS image '' falling back to uncompressed` / `failed to load data` lines and `Image file "p_eyes_normal_012.dds" does not exist` (optional normal/specular maps the source model names but that are not in the texture file you export; also `givemechecker.dds`, a placeholder) are harmless. They are no longer shown line by line (the full text stays in `wct_export.log`); one summary line with the counts is shown at the end. A real failure is still an `error` line.
+
 ## Output layout
 
 Choose one output root. The app splits it into:

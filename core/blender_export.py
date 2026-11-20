@@ -1324,6 +1324,27 @@ def patch_szio_skeleton_loader() -> None:
     log("info", "Patched szio skeleton loader for invalid addon bones")
 
 
+def split_tasks(tasks: list[dict], index: int, count: int) -> list[dict]:
+    """The share of worker `index` of `count`. Every worker computes the same split: tasks are put in a fixed order, and the
+    tasks of one source .ydd stay together (so each worker loads a drawable once). Greedy: next group to the lightest worker."""
+    def key(t: dict) -> str:
+        return f"{t['gender']}|{t['collection']}|{t['part']}|{t['draw']:05d}|{t['slot']}|{t['category']}|{t['kind']}"
+
+    ordered = sorted(tasks, key=key)
+    groups: dict[str, list[dict]] = {}
+    for t in ordered:
+        groups.setdefault(source_string(t["ydd"]), []).append(t)
+    load = [0] * count
+    mine: list[dict] = []
+    for gkey in sorted(groups):
+        group = groups[gkey]
+        w = min(range(count), key=lambda i: (load[i], i))
+        load[w] += sum(len(t["textures"] or [None]) for t in group)
+        if w == index:
+            mine.extend(group)
+    return mine
+
+
 def export(job: dict) -> None:
     out_root = Path(job.get("outRoot", ""))
     if not str(out_root):
@@ -1362,9 +1383,15 @@ def export(job: dict) -> None:
         raise RuntimeError("No source drawables matched the selected categories")
 
     log("success", f"Planned {len(tasks)} drawable/texture variant(s)")
+    worker_count = max(1, int(job.get("workerCount", 1) or 1))
+    worker_index = int(job.get("workerIndex", 0) or 0)
+    if worker_count > 1:
+        tasks = split_tasks(tasks, worker_index, worker_count)
+        log("info", f"Worker {worker_index + 1}/{worker_count}: {len(tasks)} variant(s)")
     progress("Starting core export", 0, len(tasks))
 
-    work_root = out_root / ".wct_work"
+    # One work folder per worker: a worker removes its own at the end.
+    work_root = out_root / (".wct_work" if worker_count == 1 else f".wct_work{worker_index}")
     work_root.mkdir(parents=True, exist_ok=True)
     manifest: list[dict] = []
     exported_models = 0
@@ -1560,13 +1587,18 @@ def export(job: dict) -> None:
 
             progress(f"core: {label}", index, len(tasks))
 
-        manifest_path = out_root / "export_manifest.json"
+        # With several workers each writes its part; the app merges them (and writes the fxmanifests).
+        manifest_path = out_root / (
+            "export_manifest.json" if worker_count == 1 else f"export_manifest.part{worker_index}.json"
+        )
         manifest_path.write_text(
             json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8"
         )
         log("success", f"Manifest written: {manifest_path}")
 
         for resource_root, names in sorted(stream_names.items()):
+            if worker_count > 1:
+                continue
             write_fxmanifest(resource_root, list(names))
             log(
                 "success",
