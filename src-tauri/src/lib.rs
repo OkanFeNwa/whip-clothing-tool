@@ -389,6 +389,21 @@ async fn export_assets(app: AppHandle, window: Window, payload: ExportAssetsPayl
         });
     }
 
+    // Chunked .ytyp files of an earlier export would double up with this run's: start clean.
+    if let Ok(rd) = fs::read_dir(&models_dir) {
+        for e in rd.flatten() {
+            if let Ok(files) = fs::read_dir(e.path().join("stream")) {
+                for f in files.flatten() {
+                    let fp = f.path();
+                    let n = fp.file_name().and_then(|s| s.to_str()).unwrap_or("");
+                    if n.starts_with("wctchunk_") && n.ends_with(".ytyp") {
+                        let _ = fs::remove_file(&fp);
+                    }
+                }
+            }
+        }
+    }
+
     let mut job_files: Vec<PathBuf> = Vec::new();
     for i in 0..workers {
         let job = JobPayload {

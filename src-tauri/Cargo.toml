@@ -1,6 +1,6 @@
 [package]
 name = "whip_clothing_tool"
-version = "0.2.0"
+version = "0.2.1"
 description = "Whip Clothing Tool - export GTA V clothing previews and prop models for FiveM (WHIP)"
 authors = ["you"]
 edition = "2021"

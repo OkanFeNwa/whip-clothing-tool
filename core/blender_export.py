@@ -829,15 +829,38 @@ def normalize_static_prop(drawable) -> int:
     return len(shader_group.shaders)
 
 
+YTYP_CHUNK_PREFIX = "wctchunk_"
+YTYP_CHUNK_SIZE = 250  # archetypes per .ytyp; the game loads at most 3000 .ytyp files in total
+
+
+def write_ytyp_chunks(stream_dir: Path, label: str, archetypes: list, save_asset, targets, worker_index: int = 0) -> int:
+    """Write the archetypes into a few big binary GEN8 .ytyp files. Returns how many files were written."""
+    from szio.gta5.archetypes import AssetMapTypes
+    from szio.gta5.assets import SaveOptions
+
+    stream_dir.mkdir(parents=True, exist_ok=True)
+    ordered = sorted(archetypes, key=lambda a: a.name)
+    written = 0
+    for start in range(0, len(ordered), YTYP_CHUNK_SIZE):
+        name = f"{YTYP_CHUNK_PREFIX}{label}_w{worker_index}_{start // YTYP_CHUNK_SIZE:03d}"
+        asset = AssetMapTypes(name=name, archetypes=ordered[start:start + YTYP_CHUNK_SIZE])
+        save_asset(asset, targets, stream_dir, name, SaveOptions())
+        if (stream_dir / f"{name}.ytyp").is_file():
+            written += 1
+    return written
+
+
 def write_fxmanifest(out_root: Path, model_names: list[str]) -> None:
-    """Write a resource fxmanifest registering every generated .ytyp."""
+    """Write a resource fxmanifest registering every .ytyp found in its stream folder (model_names is not used any more)."""
     lines = [
         "fx_version 'cerulean'",
         "game 'gta5'",
         "this_is_a_map 'yes'",
         "",
     ]
-    for name in sorted(set(model_names)):
+    stream = out_root / "stream"
+    names = sorted(f.stem for f in stream.glob("*.ytyp")) if stream.is_dir() else []
+    for name in names:
         lines.append(f"data_file 'DLC_ITYP_REQUEST' 'stream/{name}.ytyp'")
     out_root.mkdir(parents=True, exist_ok=True)
     (out_root / "fxmanifest.lua").write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -1399,6 +1422,7 @@ def export(job: dict) -> None:
     exported_ytyps = 0
     failed = 0
     stream_names: dict[Path, set[str]] = {}
+    stream_archetypes: dict[Path, list] = {}
 
     try:
         from szio import VPath  # used only to restore cache entries if needed
@@ -1556,10 +1580,17 @@ def export(job: dict) -> None:
                                             work / f"{base_name}.ydr",
                                             stream_dir / f"{base_name}.ydr",
                                         )
-                                    for ext in (".ytd", ".ytyp"):
-                                        for f in work.glob(f"*{ext}"):
-                                            shutil.copy2(f, stream_dir / f.name)
+                                    # The .ytyp is NOT copied per model: GTA loads at most 3000 .ytyp files
+                                    # (MapTypesStore pool), so the archetypes go into a few big files at the end.
+                                    for f in work.glob("*.ytd"):
+                                        shutil.copy2(f, stream_dir / f.name)
                                     stream_names.setdefault(resource_root, set()).add(base_name)
+                                    try:
+                                        archetype = build_archetype(base_name, drawable)
+                                        if archetype is not None:
+                                            stream_archetypes.setdefault(resource_root, []).append(archetype)
+                                    except Exception as exc:
+                                        log("error", f"Archetype for {base_name} not kept: {exc}")
                             else:
                                 target_dir = task["previewDir"]
                                 ext = str(job.get("imgFormat", "png")).lower()
@@ -1595,6 +1626,19 @@ def export(job: dict) -> None:
             json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8"
         )
         log("success", f"Manifest written: {manifest_path}")
+
+        for resource_root, archetypes in sorted(stream_archetypes.items()):
+            stream_dir = resource_root / "stream"
+            count = write_ytyp_chunks(stream_dir, resource_root.name, archetypes, save_asset, targets, worker_index)
+            log("success", f"{resource_root.name}: {len(archetypes)} archetype(s) in {count} .ytyp file(s)")
+            if count:
+                # Per-model .ytyp files of older exports would load twice and fill the pool: remove them.
+                for old_ytyp in stream_dir.glob("*.ytyp"):
+                    if not old_ytyp.name.startswith(YTYP_CHUNK_PREFIX):
+                        try:
+                            old_ytyp.unlink()
+                        except OSError:
+                            pass
 
         for resource_root, names in sorted(stream_names.items()):
             if worker_count > 1:
