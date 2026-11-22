@@ -1,4 +1,4 @@
-# Whip Clothing Tool — v0.1.0
+# Whip Clothing Tool — v0.2.1
 
 Release notes in the languages supported by the app. English is the primary version.
 
@@ -6,7 +6,13 @@ Release notes in the languages supported by the app. English is the primary vers
 
 ## English
 
-Whip Clothing Tool is a portable Windows app that exports GTA V clothing assets for FiveM / WHIP servers. This is the first public build: the export pipeline is fully functional and produces real files, not just empty folders.
+Whip Clothing Tool is a portable Windows app that exports GTA V clothing assets for FiveM / WHIP servers. The export pipeline is fully functional and produces real files, not just empty folders.
+
+### What's new in 0.2.x
+
+- **Parallel export (0.2.0).** Several Blender workers run at once (default: half the CPU cores, 1 to 4). Set `WCT_WORKERS` (1-8) to change it; `1` restores the old single-process behaviour. The tasks of one source `.ydd` stay in the same worker, the manifests are merged into `export_manifest.json` and each `fxmanifest.lua` is regenerated from its `stream/` folder at the end. The first run with a GTA V folder builds the archive index with a single worker. Output files and names are unchanged.
+- **Quieter log (0.2.0).** Harmless Blender DDS warnings are still written to `wct_export.log`, but are no longer printed line by line in the app: one summary line with the counts appears at the end. Real errors are still shown as `error` lines.
+- **Fewer `.ytyp` files (0.2.1).** GTA loads at most 3000 `.ytyp` files (the `MapTypesStore` pool); more crashes the game with `MapTypesStore Pool Full`. Archetypes are now packed into `wctchunk_*.ytyp` files (250 models each) and listed in `fxmanifest.lua`. Export all the categories you need in one run: each run rewrites these chunks from what it exported. Exports made by 0.1.x can be converted without exporting again: `blender --background --python core\merge_ytyps.py -- "<out>\models\whip_media_clothing_male\stream" "<out>\models\whip_media_clothing_female\stream"` (the originals are moved to `ytyp_single`).
 
 ### What it does
 
@@ -36,7 +42,7 @@ No system Python installation is required: the real work runs inside Blender, wh
 
 ### Install and run
 
-1. Download `whip-clothing-tool-v0.1.0-portable-win64.zip` and extract it anywhere. `whip_clothing_tool.exe` is at the **root** of the extracted folder, beside `core/`.
+1. Download `whip-clothing-tool-v0.2.1-portable-win64.zip` and extract it anywhere. `whip_clothing_tool.exe` is at the **root** of the extracted folder, beside `core/`.
 2. Run `install-dependencies.ps1` once to install Blender and Sollumz automatically (`powershell -ExecutionPolicy Bypass -File .\install-dependencies.ps1`). Add `-Dev` to also install Node.js, Rust and the Visual Studio Build Tools.
 3. Run `whip_clothing_tool.exe`. There is no app installer.
 4. Pick the output root and the source folders, choose the categories, then press **Export**.
@@ -49,7 +55,7 @@ If Blender is not on `PATH`, set the `WCT_BLENDER` environment variable to your 
 <output root>/
   models/whip_media_clothing_<male|female>/
     fxmanifest.lua
-    stream/<model>.ydr / .ytd / .ytyp
+    stream/<model>.ydr / .ytd, wctchunk_*.ytyp
     img/clothing/<gender>/<slot>/...
   previews/whip_media_clothing_<male|female>/img/clothing/<gender>/<slot>/
   export_manifest.json
@@ -58,7 +64,7 @@ If Blender is not on `PATH`, set the `WCT_BLENDER` environment variable to your 
 
 ### Spawnable models
 
-Each model in `stream/` is a normalised static prop (`normal_spec.sps`, `Color 1 = #FF8000`, `Color 2 = #000000`) with a binary GEN8 `.ytyp` archetype (flags 32, lodDist 100, hdTextureDist 5, bounds from the real vertices). The generated `fxmanifest.lua` contains `this_is_a_map 'yes'` and one `data_file 'DLC_ITYP_REQUEST' 'stream/<model>.ytyp'` line per model. Copy the resource into `resources/` and start it in `server.cfg`.
+Each model in `stream/` is a normalised static prop (`normal_spec.sps`, `Color 1 = #FF8000`, `Color 2 = #000000`) with a binary GEN8 `.ytyp` archetype (flags 32, lodDist 100, hdTextureDist 5, bounds from the real vertices). The generated `fxmanifest.lua` contains `this_is_a_map 'yes'` and one `data_file 'DLC_ITYP_REQUEST' 'stream/wctchunk_*.ytyp'` line per chunk (250 models each). Copy the resource into `resources/` and start it in `server.cfg`.
 
 **After adding or replacing files in `stream/`, every client must fully reconnect** — `refresh` + `restart` does not update files already cached by the client. If `RequestModel` still fails after a clean reconnect, the tool falls back to `prop_cap_01`.
 
@@ -75,7 +81,13 @@ Each model in `stream/` is a normalised static prop (`normal_spec.sps`, `Color 1
 
 ## Italiano
 
-Whip Clothing Tool è un’app portable per Windows che esporta asset di abbigliamento GTA V per server FiveM / WHIP. Questa è la prima build pubblica: la pipeline di export è completa e genera file reali, non solo cartelle vuote.
+Whip Clothing Tool è un’app portable per Windows che esporta asset di abbigliamento GTA V per server FiveM / WHIP. La pipeline di export è completa e genera file reali, non solo cartelle vuote.
+
+### Novità di 0.2.x
+
+- **Export parallelo (0.2.0).** Gira più worker Blender in contemporanea (default: metà dei core CPU, da 1 a 4). La variabile d’ambiente `WCT_WORKERS` (1-8) permette di cambiarlo; `1` ripristina il vecchio comportamento a processo singolo. I task di uno stesso `.ydd` restano nello stesso worker, i manifest vengono uniti in `export_manifest.json` e ogni `fxmanifest.lua` viene riscritto dalla propria cartella `stream/` alla fine. La prima esecuzione con una cartella GTA V crea l’indice degli archivi con un solo worker. File e nomi esportati non cambiano.
+- **Log meno rumoroso (0.2.0).** I warning DDS non fatali di Blender restano in `wct_export.log` ma non vengono più stampati riga per riga nell’app: alla fine compare una riga di riepilogo con i conteggi. I veri errori sono ancora mostrati come righe `error`.
+- **Meno file `.ytyp` (0.2.1).** GTA carica al massimo 3000 file `.ytyp` (il pool `MapTypesStore`); di più il gioco crasha con `MapTypesStore Pool Full`. Gli archetype ora vengono scritti in file `wctchunk_*.ytyp` (250 modelli ciascuno) e elencati nell'`fxmanifest.lua`. Esporta in una sola esecuzione tutte le categorie che ti servono: ogni export riscrive questi chunk in base a ciò che ha generato. Gli export di 0.1.x si convertono senza riesportare: `blender --background --python core\merge_ytyps.py -- "<out>\models\whip_media_clothing_male\stream" "<out>\models\whip_media_clothing_female\stream"` (gli originali vengono spostati in `ytyp_single`).
 
 ### Cosa fa
 
@@ -105,7 +117,7 @@ Non serve Python di sistema: il lavoro reale gira dentro Blender, che fornisce g
 
 ### Installazione e avvio
 
-1. Scarica `whip-clothing-tool-v0.1.0-portable-win64.zip` ed estrailo dove vuoi. `whip_clothing_tool.exe` è nella **root** della cartella estratta, accanto a `core/`.
+1. Scarica `whip-clothing-tool-v0.2.1-portable-win64.zip` ed estrailo dove vuoi. `whip_clothing_tool.exe` è nella **root** della cartella estratta, accanto a `core/`.
 2. Esegui una volta `install-dependencies.ps1` per installare Blender e Sollumz automaticamente (`powershell -ExecutionPolicy Bypass -File .\install-dependencies.ps1`). Aggiungi `-Dev` per installare anche Node.js, Rust e i Visual Studio Build Tools.
 3. Avvia `whip_clothing_tool.exe`. Non c’è installer per l’app.
 4. Scegli output root e cartelle sorgente, seleziona le categorie e premi **Export**.
@@ -114,7 +126,7 @@ Se Blender non è in `PATH`, imposta la variabile d’ambiente `WCT_BLENDER` con
 
 ### Modelli spawnabili
 
-Ogni modello in `stream/` è un prop statico normalizzato (`normal_spec.sps`, Color 1 `#FF8000`, Color 2 `#000000`) con un archetype `.ytyp` binario GEN8 (flags 32, lodDist 100, hdTextureDist 5, bounds dai vertici reali). L'`fxmanifest.lua` generato contiene `this_is_a_map 'yes'` e una riga `data_file 'DLC_ITYP_REQUEST' 'stream/<modello>.ytyp'` per ogni modello. Copia la resource in `resources/` e avviala in `server.cfg`.
+Ogni modello in `stream/` è un prop statico normalizzato (`normal_spec.sps`, Color 1 `#FF8000`, Color 2 `#000000`) con un archetype `.ytyp` binario GEN8 (flags 32, lodDist 100, hdTextureDist 5, bounds dai vertici reali). L'`fxmanifest.lua` generato contiene `this_is_a_map 'yes'` e una riga `data_file 'DLC_ITYP_REQUEST' 'stream/wctchunk_*.ytyp'` per ogni chunk (250 modelli ciascuno). Copia la resource in `resources/` e avviala in `server.cfg`.
 
 **Dopo aver aggiunto o sostituito file in `stream/`, ogni client deve riconnettersi completamente**: `refresh` + `restart` non aggiornano i file già scaricati. Se `RequestModel` fallisce ancora dopo una riconnessione pulita, l'app usa `prop_cap_01` come ultima risorsa.
 
@@ -131,7 +143,13 @@ Ogni modello in `stream/` è un prop statico normalizzato (`normal_spec.sps`, Co
 
 ## Español
 
-Whip Clothing Tool es una aplicación portable para Windows que exporta recursos de ropa de GTA V para servidores FiveM / WHIP. Esta es la primera compilación pública: el proceso de exportación es completo y genera archivos reales, no solo carpetas vacías.
+Whip Clothing Tool es una aplicación portable para Windows que exporta recursos de ropa de GTA V para servidores FiveM / WHIP. El proceso de exportación es completo y genera archivos reales, no solo carpetas vacías.
+
+### Novedades de 0.2.x
+
+- **Exportación paralela (0.2.0).** Se ejecutan varios workers de Blender a la vez (por defecto, la mitad de los núcleos de CPU, entre 1 y 4). La variable de entorno `WCT_WORKERS` (1-8) permite cambiarlo; `1` restaura el comportamiento antiguo de un solo proceso. Las tareas de un mismo `.ydd` permanecen en el mismo worker, los manifiestos se unen en `export_manifest.json` y cada `fxmanifest.lua` se regenera desde su carpeta `stream/` al final. La primera ejecución con una carpeta de GTA V crea el índice de archivos con un solo worker. Los archivos y nombres exportados no cambian.
+- **Registro menos ruidoso (0.2.0).** Las advertencias DDS inofensivas de Blender siguen escribiéndose en `wct_export.log`, pero ya no se imprimen línea por línea en la app: al final aparece una línea de resumen con los recuentos. Los errores reales se siguen mostrando como líneas `error`.
+- **Menos archivos `.ytyp` (0.2.1).** GTA carga como máximo 3000 archivos `.ytyp` (el pool `MapTypesStore`); más hacen que el juego se cierre con `MapTypesStore Pool Full`. Los arquetipos ahora se escriben en archivos `wctchunk_*.ytyp` (250 modelos cada uno) y se enumeran en `fxmanifest.lua`. Exporta en una sola ejecución todas las categorías que necesites: cada exportación reescribe estos chunks con lo que ha generado. Las exportaciones de 0.1.x se pueden convertir sin volver a exportar: `blender --background --python core\merge_ytyps.py -- "<out>\models\whip_media_clothing_male\stream" "<out>\models\whip_media_clothing_female\stream"` (los originales se mueven a `ytyp_single`).
 
 ### Qué hace
 
@@ -161,7 +179,7 @@ No se necesita Python del sistema: el trabajo real se ejecuta dentro de Blender,
 
 ### Instalación y uso
 
-1. Descarga `whip-clothing-tool-v0.1.0-portable-win64.zip` y extráelo donde quieras. `whip_clothing_tool.exe` está en la **raíz** de la carpeta extraída, junto a `core/`.
+1. Descarga `whip-clothing-tool-v0.2.1-portable-win64.zip` y extráelo donde quieras. `whip_clothing_tool.exe` está en la **raíz** de la carpeta extraída, junto a `core/`.
 2. Ejecuta una vez `install-dependencies.ps1` para instalar Blender y Sollumz automáticamente (`powershell -ExecutionPolicy Bypass -File .\install-dependencies.ps1`). Añade `-Dev` para instalar también Node.js, Rust y Visual Studio Build Tools.
 3. Ejecuta `whip_clothing_tool.exe`. No hay instalador de la app.
 4. Elige la carpeta de salida y las fuentes, selecciona las categorías y pulsa **Export**.
@@ -170,7 +188,7 @@ Si Blender no está en `PATH`, define la variable de entorno `WCT_BLENDER` con l
 
 ### Modelos instanciables
 
-Cada modelo en `stream/` es un objeto estático normalizado (`normal_spec.sps`, Color 1 `#FF8000`, Color 2 `#000000`) con un arquetipo `.ytyp` binario GEN8 (flags 32, lodDist 100, hdTextureDist 5, bounds de los vértices reales). El `fxmanifest.lua` generado contiene `this_is_a_map 'yes'` y una línea `data_file 'DLC_ITYP_REQUEST' 'stream/<modelo>.ytyp'` por modelo. Copia el resource en `resources/` y arráncalo en `server.cfg`.
+Cada modelo en `stream/` es un objeto estático normalizado (`normal_spec.sps`, Color 1 `#FF8000`, Color 2 `#000000`) con un arquetipo `.ytyp` binario GEN8 (flags 32, lodDist 100, hdTextureDist 5, bounds de los vértices reales). El `fxmanifest.lua` generado contiene `this_is_a_map 'yes'` y una línea `data_file 'DLC_ITYP_REQUEST' 'stream/wctchunk_*.ytyp'` por chunk (250 modelos cada uno). Copia el resource en `resources/` y arráncalo en `server.cfg`.
 
 **Después de añadir o reemplazar archivos en `stream/`, todos los clientes deben reconectarse por completo**: `refresh` + `restart` no actualizan los archivos ya descargados. Si `RequestModel` sigue fallando tras una reconexión limpia, la app usa `prop_cap_01` como último recurso.
 
@@ -187,7 +205,13 @@ Cada modelo en `stream/` es un objeto estático normalizado (`normal_spec.sps`, 
 
 ## Français
 
-Whip Clothing Tool est une application portable Windows qui exporte des ressources de vêtements GTA V pour les serveurs FiveM / WHIP. C’est la première version publique : le pipeline d’export est complet et produit de vrais fichiers, pas seulement des dossiers vides.
+Whip Clothing Tool est une application portable Windows qui exporte des ressources de vêtements GTA V pour les serveurs FiveM / WHIP. Le pipeline d’export est complet et produit de vrais fichiers, pas seulement des dossiers vides.
+
+### Nouveautés de 0.2.x
+
+- **Export parallèle (0.2.0).** Plusieurs workers Blender tournent en même temps (par défaut : la moitié des cœurs CPU, entre 1 et 4). La variable d’environnement `WCT_WORKERS` (1-8) permet de le modifier ; `1` restaure l’ancien comportement en un seul processus. Les tâches d’un même `.ydd` restent dans le même worker, les manifests sont fusionnés dans `export_manifest.json` et chaque `fxmanifest.lua` est régénéré depuis son dossier `stream/` à la fin. Le premier passage avec un dossier GTA V construit l’index des archives avec un seul worker. Les fichiers et les noms exportés ne changent pas.
+- **Journal moins bruyant (0.2.0).** Les avertissements DDS sans gravité de Blender restent dans `wct_export.log`, mais ne sont plus affichés ligne par ligne dans l’app : une ligne récapitulative avec les comptes apparaît à la fin. Les vraies erreurs sont toujours affichées comme lignes `error`.
+- **Moins de fichiers `.ytyp` (0.2.1).** GTA charge au maximum 3000 fichiers `.ytyp` (le pool `MapTypesStore`) ; au-delà, le jeu plante avec `MapTypesStore Pool Full`. Les archétypes sont désormais écrits dans des fichiers `wctchunk_*.ytyp` (250 modèles chacun) et listés dans `fxmanifest.lua`. Exportez en une seule fois toutes les catégories dont vous avez besoin : chaque export réécrit ces fichiers à partir de ce qu’il a généré. Les exports de 0.1.x peuvent être convertis sans réexporter : `blender --background --python core\merge_ytyps.py -- "<out>\models\whip_media_clothing_male\stream" "<out>\models\whip_media_clothing_female\stream"` (les originaux sont déplacés vers `ytyp_single`).
 
 ### Fonctionnalités
 
@@ -217,7 +241,7 @@ Aucun Python système requis : le travail réel s’exécute dans Blender, qui f
 
 ### Installation et utilisation
 
-1. Téléchargez `whip-clothing-tool-v0.1.0-portable-win64.zip` et extrayez-le où vous voulez. `whip_clothing_tool.exe` est à la **racine** du dossier extrait, à côté de `core/`.
+1. Téléchargez `whip-clothing-tool-v0.2.1-portable-win64.zip` et extrayez-le où vous voulez. `whip_clothing_tool.exe` est à la **racine** du dossier extrait, à côté de `core/`.
 2. Exécutez une fois `install-dependencies.ps1` pour installer Blender et Sollumz automatiquement (`powershell -ExecutionPolicy Bypass -File .\install-dependencies.ps1`). Ajoutez `-Dev` pour installer aussi Node.js, Rust et les Visual Studio Build Tools.
 3. Lancez `whip_clothing_tool.exe`. Il n’y a pas d’installateur pour l’application.
 4. Choisissez le dossier de sortie et les sources, sélectionnez les catégories, puis cliquez sur **Export**.
@@ -226,7 +250,7 @@ Si Blender n’est pas dans `PATH`, définissez la variable d’environnement `W
 
 ### Modèles instanciables
 
-Chaque modèle dans `stream/` est un objet statique normalisé (`normal_spec.sps`, Color 1 `#FF8000`, Color 2 `#000000`) avec un archétype `.ytyp` binaire GEN8 (flags 32, lodDist 100, hdTextureDist 5, bounds issus des vrais sommets). Le `fxmanifest.lua` généré contient `this_is_a_map 'yes'` et une ligne `data_file 'DLC_ITYP_REQUEST' 'stream/<modèle>.ytyp'` par modèle. Copiez la ressource dans `resources/` et démarrez-la dans `server.cfg`.
+Chaque modèle dans `stream/` est un objet statique normalisé (`normal_spec.sps`, Color 1 `#FF8000`, Color 2 `#000000`) avec un archétype `.ytyp` binaire GEN8 (flags 32, lodDist 100, hdTextureDist 5, bounds issus des vrais sommets). Le `fxmanifest.lua` généré contient `this_is_a_map 'yes'` et une ligne `data_file 'DLC_ITYP_REQUEST' 'stream/wctchunk_*.ytyp'` par bloc de 250 modèles. Copiez la ressource dans `resources/` et démarrez-la dans `server.cfg`.
 
 **Après avoir ajouté ou remplacé des fichiers dans `stream/`, chaque client doit se reconnecter entièrement** : `refresh` + `restart` ne mettent pas à jour les fichiers déjà téléchargés. Si `RequestModel` échoue encore après une reconnexion propre, l’application utilise `prop_cap_01` en dernier recours.
 
@@ -243,7 +267,13 @@ Chaque modèle dans `stream/` est un objet statique normalisé (`normal_spec.sps
 
 ## Deutsch
 
-Whip Clothing Tool ist eine portable Windows-App, die GTA-V-Kleidungs-Assets für FiveM-/WHIP-Server exportiert. Dies ist der erste öffentliche Build: Die Export-Pipeline ist vollständig und erzeugt echte Dateien statt leerer Ordner.
+Whip Clothing Tool ist eine portable Windows-App, die GTA-V-Kleidungs-Assets für FiveM-/WHIP-Server exportiert. Die Export-Pipeline ist vollständig und erzeugt echte Dateien statt leerer Ordner.
+
+### Neuigkeiten in 0.2.x
+
+- **Paralleler Export (0.2.0).** Mehrere Blender-Worker laufen gleichzeitig (standardmäßig die Hälfte der CPU-Kerne, 1 bis 4). Mit der Umgebungsvariable `WCT_WORKERS` (1-8) lässt sich das ändern; `1` stellt das alte Verhalten mit einem einzelnen Prozess wieder her. Die Aufgaben einer `.ydd` bleiben im selben Worker, die Manifeste werden zu `export_manifest.json` zusammengeführt und jede `fxmanifest.lua` wird am Ende aus ihrem `stream/`-Ordner neu geschrieben. Der erste Lauf mit einem GTA-V-Ordner erstellt den Archivindex mit einem einzelnen Worker. Ausgabedateien und -namen bleiben unverändert.
+- **Leiseres Protokoll (0.2.0).** Harmlose Blender-DDS-Warnungen stehen weiterhin in `wct_export.log`, werden aber nicht mehr Zeile für Zeile in der App angezeigt: am Ende erscheint eine Zusammenfassungszeile mit den Zahlen. Echte Fehler werden weiterhin als `error`-Zeilen angezeigt.
+- **Weniger `.ytyp`-Dateien (0.2.1).** GTA lädt höchstens 3000 `.ytyp`-Dateien (den `MapTypesStore`-Pool); mehr lässt das Spiel mit `MapTypesStore Pool Full` abstürzen. Die Archetypen werden jetzt in `wctchunk_*.ytyp`-Dateien (je 250 Modelle) geschrieben und in `fxmanifest.lua` aufgeführt. Exportiere alle benötigten Kategorien in einem Lauf: jeder Lauf schreibt diese Blöcke aus dem, was er exportiert hat, neu. Exporte aus 0.1.x lassen sich ohne erneuten Export konvertieren: `blender --background --python core\merge_ytyps.py -- "<out>\models\whip_media_clothing_male\stream" "<out>\models\whip_media_clothing_female\stream"` (die Originale werden nach `ytyp_single` verschoben).
 
 ### Funktionen
 
@@ -273,7 +303,7 @@ Es ist kein System-Python nötig: die eigentliche Arbeit läuft in Blender, das 
 
 ### Installation und Start
 
-1. Lade `whip-clothing-tool-v0.1.0-portable-win64.zip` herunter und entpacke es beliebig. `whip_clothing_tool.exe` liegt im **Stammverzeichnis** des entpackten Ordners, neben `core/`.
+1. Lade `whip-clothing-tool-v0.2.1-portable-win64.zip` herunter und entpacke es beliebig. `whip_clothing_tool.exe` liegt im **Stammverzeichnis** des entpackten Ordners, neben `core/`.
 2. Führe einmal `install-dependencies.ps1` aus, um Blender und Sollumz automatisch zu installieren (`powershell -ExecutionPolicy Bypass -File .\install-dependencies.ps1`). Mit `-Dev` werden zusätzlich Node.js, Rust und die Visual Studio Build Tools installiert.
 3. Starte `whip_clothing_tool.exe`. Es gibt keinen Installer für die App.
 4. Wähle Ausgabeordner und Quellen, markiere die Kategorien und klicke auf **Export**.
@@ -282,7 +312,7 @@ Falls Blender nicht in `PATH` liegt, setze die Umgebungsvariable `WCT_BLENDER` a
 
 ### Spawnbare Modelle
 
-Jedes Modell in `stream/` ist ein normalisiertes statisches Objekt (`normal_spec.sps`, Color 1 `#FF8000`, Color 2 `#000000`) mit einem binären GEN8-`.ytyp`-Archetyp (flags 32, lodDist 100, hdTextureDist 5, Bounds aus den echten Vertizes). Das erzeugte `fxmanifest.lua` enthält `this_is_a_map 'yes'` und eine `data_file 'DLC_ITYP_REQUEST' 'stream/<Modell>.ytyp'`-Zeile pro Modell. Kopiere die Ressource nach `resources/` und starte sie in der `server.cfg`.
+Jedes Modell in `stream/` ist ein normalisiertes statisches Objekt (`normal_spec.sps`, Color 1 `#FF8000`, Color 2 `#000000`) mit einem binären GEN8-`.ytyp`-Archetyp (flags 32, lodDist 100, hdTextureDist 5, Bounds aus den echten Vertizes). Das erzeugte `fxmanifest.lua` enthält `this_is_a_map 'yes'` und eine `data_file 'DLC_ITYP_REQUEST' 'stream/wctchunk_*.ytyp'`-Zeile pro Block (je 250 Modelle). Kopiere die Ressource nach `resources/` und starte sie in der `server.cfg`.
 
 **Nach dem Hinzufügen oder Ersetzen von Dateien in `stream/` muss jeder Client die Verbindung vollständig trennen und neu verbinden**: `refresh` + `restart` aktualisieren bereits heruntergeladene Dateien nicht. Falls `RequestModel` nach einer sauberen Wiederverbindung weiterhin scheitert, verwendet die App `prop_cap_01` als letzten Ausweg.
 
